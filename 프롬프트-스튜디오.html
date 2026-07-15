@@ -1,0 +1,692 @@
+<title>프롬프트 스튜디오</title>
+<style>
+  :root {
+    --paper: #f1efe9;
+    --surface: #fbfaf7;
+    --surface-2: #f6f4ef;
+    --ink: #1a1c21;
+    --muted: #70727b;
+    --faint: #9a9ca4;
+    --line: #e2ded5;
+    --line-strong: #d3cec3;
+    --lab: #0f8f86;
+    --travel: #d9633a;
+    --accent: var(--lab);
+    --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-line: color-mix(in srgb, var(--accent) 40%, var(--line));
+    --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(20,20,25,.04), 0 8px 28px rgba(20,20,25,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #131418;
+      --surface: #1b1d23;
+      --surface-2: #21242b;
+      --ink: #ecebe5;
+      --muted: #9a9ca5;
+      --faint: #6c6e78;
+      --line: #2b2e36;
+      --line-strong: #383c46;
+      --lab: #2fc9bd;
+      --travel: #f0865a;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f1efe9; --surface: #fbfaf7; --surface-2: #f6f4ef;
+    --ink: #1a1c21; --muted: #70727b; --faint: #9a9ca4;
+    --line: #e2ded5; --line-strong: #d3cec3; --lab: #0f8f86; --travel: #d9633a;
+    --shadow: 0 1px 2px rgba(20,20,25,.04), 0 8px 28px rgba(20,20,25,.06);
+  }
+  :root[data-theme="dark"] {
+    --paper: #131418; --surface: #1b1d23; --surface-2: #21242b;
+    --ink: #ecebe5; --muted: #9a9ca5; --faint: #6c6e78;
+    --line: #2b2e36; --line-strong: #383c46; --lab: #2fc9bd; --travel: #f0865a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 22px 64px; }
+
+  /* Header */
+  header.top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+    padding-bottom: 20px; margin-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .glyph {
+    width: 40px; height: 40px; flex: none; border-radius: 11px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    display: grid; place-items: center;
+    color: var(--accent); font-size: 20px;
+    transition: background .3s, border-color .3s, color .3s;
+  }
+  .brand h1 { font-size: 20px; letter-spacing: -.02em; margin: 0; font-weight: 700; }
+  .brand .sub { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--faint);
+  }
+
+  /* Layout */
+  .studio { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .studio { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head .eyebrow { color: var(--accent); transition: color .3s; }
+  .panel-body { padding: 18px; }
+
+  /* Category toggle */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .mode-btn {
+    appearance: none; cursor: pointer; text-align: left;
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-family: var(--sans); font-size: 14px;
+    transition: border-color .2s, background .2s, box-shadow .2s;
+  }
+  .mode-btn .m-label { font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
+  .mode-btn .m-desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .mode-btn[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Fields */
+  .field { margin-bottom: 15px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+  }
+  .field label .req { color: var(--accent); margin-left: 3px; }
+  input[type="text"], textarea, select {
+    width: 100%; font-family: var(--sans); font-size: 14px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-strong);
+    border-radius: 9px; padding: 9px 11px; line-height: 1.5;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  ::placeholder { color: var(--faint); }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Chip group */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    appearance: none; cursor: pointer; font-family: var(--sans); font-size: 13px;
+    background: var(--surface-2); color: var(--ink);
+    border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 13px;
+    transition: all .15s;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 8px; padding: 3px; gap: 3px; }
+  .seg button {
+    appearance: none; cursor: pointer; border: none; background: transparent;
+    font-family: var(--sans); font-size: 13px; color: var(--muted);
+    padding: 5px 14px; border-radius: 6px; transition: all .15s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .toggle-line { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+  .toggle-line input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  /* Tone rules banner */
+  .tone {
+    margin-top: 20px; padding: 13px 15px; border-radius: 10px;
+    background: var(--surface-2); border: 1px dashed var(--line-strong);
+  }
+  .tone .eyebrow { color: var(--faint); }
+  .tone ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tone li {
+    font-size: 11.5px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px;
+  }
+
+  /* Output */
+  .out-wrap { position: sticky; top: 20px; }
+  .out {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.72;
+    white-space: pre-wrap; word-break: break-word;
+    color: var(--ink); max-height: 62vh; overflow-y: auto;
+    padding: 4px 2px 2px;
+  }
+  .out .ph { color: var(--faint); }
+  .actions { display: flex; gap: 9px; }
+  .btn {
+    appearance: none; cursor: pointer; font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    border-radius: 9px; padding: 9px 15px; border: 1px solid var(--line-strong);
+    background: var(--surface-2); color: var(--ink); transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.copied { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Draft view */
+  .empty-state {
+    text-align: center; padding: 30px 18px; color: var(--muted);
+  }
+  .empty-state .big { font-size: 30px; margin-bottom: 10px; }
+  .empty-state p { margin: 0 0 16px; font-size: 13.5px; }
+  .empty-state .hint { font-size: 12px; color: var(--faint); margin-top: 14px; }
+  .btn.big-gen { padding: 12px 22px; font-size: 15px; }
+
+  .loading { display: flex; align-items: center; gap: 11px; padding: 26px 6px; color: var(--muted); font-size: 13.5px; }
+  .spinner {
+    width: 17px; height: 17px; border-radius: 50%;
+    border: 2px solid var(--line-strong); border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+  .draft {
+    max-height: 66vh; overflow-y: auto; padding: 2px 4px 4px;
+    font-size: 14.5px; line-height: 1.72;
+  }
+  .draft h1 { font-size: 20px; letter-spacing: -.02em; margin: 22px 0 10px; line-height: 1.35; }
+  .draft h2 { font-size: 17px; letter-spacing: -.01em; margin: 22px 0 9px; }
+  .draft h3 { font-size: 15px; margin: 18px 0 8px; color: var(--muted); }
+  .draft h1:first-child, .draft h2:first-child { margin-top: 2px; }
+  .draft p { margin: 0 0 13px; }
+  .draft ul, .draft ol { margin: 0 0 14px; padding-left: 20px; }
+  .draft li { margin-bottom: 5px; }
+  .draft strong { font-weight: 700; }
+  .draft hr { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
+  .draft .photo {
+    display: inline-block; font-family: var(--mono); font-size: 12px;
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px dashed var(--accent-line); border-radius: 6px; padding: 2px 8px; margin: 2px 0;
+  }
+  .err { padding: 18px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--muted); font-size: 13px; }
+  .err strong { color: var(--ink); }
+
+  .hidden { display: none !important; }
+  .foot { margin-top: 26px; font-size: 12px; color: var(--faint); text-align: center; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="glyph" id="glyph">✍️</div>
+      <div>
+        <h1>프롬프트 스튜디오</h1>
+        <p class="sub">입력을 채우면 붙여넣기용 초안 프롬프트가 완성됩니다</p>
+      </div>
+    </div>
+    <span class="eyebrow" id="modeTag">MODE · AI 작업 실험실</span>
+  </header>
+
+  <div class="studio">
+    <!-- LEFT: controls -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="eyebrow">01 · 조절판</span>
+        <button class="btn" id="resetBtn" style="padding:5px 11px;font-size:12px;">초기화</button>
+      </div>
+      <div class="panel-body">
+        <div class="modes">
+          <button class="mode-btn" data-mode="lab" aria-pressed="true">
+            <span class="m-label">🧪 AI 작업 실험실</span>
+            <span class="m-desc">실험 노트 · Before/After · 실전 팁</span>
+          </button>
+          <button class="mode-btn" data-mode="travel" aria-pressed="false">
+            <span class="m-label">✈️ 여행</span>
+            <span class="m-desc">경험담 · 동행별 맞춤 · 실용 정보</span>
+          </button>
+        </div>
+
+        <!-- LAB fields -->
+        <div id="fields-lab">
+          <div class="field">
+            <label>이번 실험 주제 <span class="req">*</span></label>
+            <input type="text" data-k="topic" placeholder="예: 회의록 정리를 AI로 자동화해보기">
+          </div>
+          <div class="field">
+            <label>사용한 AI 도구</label>
+            <input type="text" data-k="tools" placeholder="예: Claude, Notion AI">
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>기존 방식 · Before</label>
+              <textarea data-k="before" placeholder="원래는 어떻게 했나요?"></textarea>
+            </div>
+            <div class="field">
+              <label>AI 방식 · After</label>
+              <textarea data-k="after" placeholder="AI로 어떻게 바꿨나요?"></textarea>
+            </div>
+          </div>
+          <div class="field">
+            <label>결과 (시간·품질·실패)</label>
+            <textarea data-k="result" placeholder="예: 30분 → 5분. 다만 표 정리는 여전히 손이 감"></textarea>
+          </div>
+          <div class="field">
+            <label>강조할 포인트 / 에피소드</label>
+            <textarea data-k="episode" placeholder="꼭 넣고 싶은 순간이나 깨달음"></textarea>
+          </div>
+        </div>
+
+        <!-- TRAVEL fields -->
+        <div id="fields-travel" class="hidden">
+          <div class="row">
+            <div class="field">
+              <label>여행지 <span class="req">*</span></label>
+              <input type="text" data-k="place" placeholder="예: 일본 다카야마">
+            </div>
+            <div class="field">
+              <label>지역</label>
+              <div class="seg" id="regionSeg">
+                <button data-region="국내" aria-pressed="false">국내</button>
+                <button data-region="해외" aria-pressed="true">해외</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>동행 유형 <span class="req">*</span></label>
+            <div class="chips" id="companionChips">
+              <button class="chip" data-companion="혼자" aria-pressed="false">혼자</button>
+              <button class="chip" data-companion="짝꿍" aria-pressed="false">짝꿍</button>
+              <button class="chip" data-companion="가족" aria-pressed="false">가족</button>
+              <button class="chip" data-companion="부모님" aria-pressed="true">부모님</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>기간 / 시기</label>
+              <input type="text" data-k="period" placeholder="예: 3박 4일, 10월">
+            </div>
+            <div class="field">
+              <label>한 줄 테마</label>
+              <input type="text" data-k="theme" placeholder="예: 부모님과 처음 간 해외">
+            </div>
+          </div>
+          <div class="field">
+            <label>꼭 넣을 장소 / 에피소드</label>
+            <textarea data-k="tepisode" placeholder="가장 기억에 남은 순간"></textarea>
+          </div>
+          <div class="field">
+            <label class="toggle-line">
+              <input type="checkbox" data-k="info" checked>
+              비용·동선·예약 등 실용 정보 포함
+            </label>
+          </div>
+        </div>
+
+        <!-- Common: length -->
+        <div class="field" style="margin-top:16px;">
+          <label>목표 분량</label>
+          <select data-k="length">
+            <option value="짧게 (약 1,000~1,300자)">짧게 (약 1,000~1,300자)</option>
+            <option value="보통 (약 1,500~2,000자)" selected>보통 (약 1,500~2,000자)</option>
+            <option value="길게 (약 2,500자 이상)">길게 (약 2,500자 이상)</option>
+          </select>
+        </div>
+
+        <div class="tone">
+          <span class="eyebrow">항상 적용되는 톤 규칙</span>
+          <ul>
+            <li>~어요 / ~습니다 혼용</li>
+            <li>무게감 + 유머 한 방울</li>
+            <li>AI 티 나는 마무리 금지</li>
+            <li>문단 3~4줄, 모바일 우선</li>
+            <li>이모지 소제목</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: output -->
+    <section class="panel out-wrap">
+      <div class="panel-head">
+        <div class="seg" id="viewSeg">
+          <button data-view="draft" aria-pressed="true">초안</button>
+          <button data-view="prompt" aria-pressed="false">프롬프트</button>
+        </div>
+        <div class="actions" id="draftActions">
+          <button class="btn" id="regenBtn" style="display:none;">다시 생성</button>
+          <button class="btn primary" id="copyDraftBtn" style="display:none;">초안 복사</button>
+        </div>
+        <div class="actions hidden" id="promptActions">
+          <button class="btn primary" id="copyBtn">복사</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <!-- Draft view -->
+        <div id="draftView">
+          <div class="empty-state" id="draftEmpty">
+            <div class="big">✨</div>
+            <p>입력을 채운 뒤 아래 버튼을 누르면<br>이 페이지 안에서 바로 초안이 완성됩니다.</p>
+            <button class="btn primary big-gen" id="genBtn">초안 생성하기</button>
+            <div class="hint" id="genHint"></div>
+          </div>
+          <div class="loading hidden" id="draftLoading">
+            <span class="spinner"></span> 초안을 쓰는 중입니다… 잠시만요
+          </div>
+          <div class="draft hidden" id="draftResult"></div>
+          <div class="err hidden" id="draftError"></div>
+        </div>
+        <!-- Prompt view -->
+        <div id="promptView" class="hidden">
+          <div class="out" id="output"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot">완성된 프롬프트를 복사해서 Claude에게 붙여넣으면 초안이 나옵니다.</p>
+</div>
+
+<script>
+(function () {
+  var state = {
+    mode: "lab",
+    region: "해외",
+    companion: "부모님",
+    length: "보통 (약 1,500~2,000자)",
+    topic:"", tools:"", before:"", after:"", result:"", episode:"",
+    place:"", period:"", theme:"", tepisode:"", info:true
+  };
+  var STORE = "prompt-studio-v1";
+  try { var saved = JSON.parse(localStorage.getItem(STORE)); if (saved) Object.assign(state, saved); } catch(e){}
+
+  var $ = function (s, r) { return (r||document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+
+  var companionNote = {
+    "혼자":  "자유로움과 사색, 나만의 속도를 강조",
+    "짝꿍":  "둘만의 순간과 소소한 티키타카를 강조",
+    "가족":  "아이와 어른 모두 만족하는 배려 포인트를 강조",
+    "부모님":"체력·편의·효도 포인트와 뭉클한 순간을 강조"
+  };
+
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch(e){} }
+
+  function line(label, val) { return val && String(val).trim() ? "- " + label + ": " + String(val).trim() + "\n" : ""; }
+
+  function build() {
+    var L = state.length;
+    var header =
+      "아래 규칙과 구조를 지켜서 티스토리 블로그 초안을 써 주세요.\n\n" +
+      "# 문체·톤 규칙 (반드시 준수)\n" +
+      "- '~어요' / '~습니다' 체를 자연스럽게 혼용, 정중하되 딱딱하지 않게\n" +
+      "- 진중한 무게감을 유지하되 곳곳에 가벼운 유머 한 방울 (과하지 않게)\n" +
+      "- 오글거리는 감탄사 남발과 AI 티 나는 상투적 마무리 금지\n" +
+      "- 한 문단은 3~4줄 이내, 모바일 가독성 우선\n" +
+      "- 소제목은 이모지 1개 + 짧고 클릭하고 싶은 문구\n" +
+      "- 목표 분량: " + L + "\n\n";
+
+    var body = "";
+    if (state.mode === "lab") {
+      body =
+        "# 카테고리: AI 작업 실험실 (실험 노트 컨셉)\n\n" +
+        "## 이번 실험 정보\n" +
+        line("실험 주제", state.topic) +
+        line("사용한 AI 도구", state.tools) +
+        line("기존 방식(Before)", state.before) +
+        line("AI 방식(After)", state.after) +
+        line("결과", state.result) +
+        line("강조할 포인트/에피소드", state.episode) +
+        "\n## 원하는 글 구조\n" +
+        "1. 🔬 도입 — 공감 가는 삽질 경험 + 문제 제기\n" +
+        "2. ⚙️ 실험 설계 — 무엇을, 어떤 도구로, 어떻게 해봤는지\n" +
+        "3. 📊 Before / After 비교\n" +
+        "4. 💡 결과 & 배운 점 — 실패했다면 이유도 솔직하게\n" +
+        "5. 🧭 이럴 때 써보세요 — 독자가 바로 따라 할 실전 팁\n" +
+        "6. 마무리 — 다음 실험 떡밥 or 독자에게 던지는 질문\n";
+    } else {
+      body =
+        "# 카테고리: 여행 (경험담 중심)\n\n" +
+        "## 이번 여행 정보\n" +
+        line("여행지", state.place) +
+        line("지역", state.region) +
+        line("동행 유형", state.companion + " → " + companionNote[state.companion]) +
+        line("기간/시기", state.period) +
+        line("한 줄 테마", state.theme) +
+        line("꼭 넣을 장소/에피소드", state.tepisode) +
+        "- 실용 정보(비용·동선·예약): " + (state.info ? "포함" : "생략") + "\n" +
+        "\n## 원하는 글 구조\n" +
+        "1. 🧳 도입 — 왜 이 여행을, 이 동행과 갔는지 (감성 훅)\n" +
+        "2. 📍 코스 흐름 — 시간·동선 순서대로, 동행 유형에 맞춘 배려 포인트 강조\n" +
+        (state.info ? "3. 💰 실용 정보 — 비용·이동·예약 팁\n" : "") +
+        (state.info ? "4" : "3") + ". 📸 하이라이트 — 가장 기억에 남은 순간 1~2개, [사진: 설명] 표시\n" +
+        (state.info ? "5" : "4") + ". ⚠️ 솔직 후기 — 아쉬웠던 점 / 이건 알고 가세요\n" +
+        (state.info ? "6" : "5") + ". 마무리 — 이 동행에게 추천? + 다음 여행지 예고\n";
+    }
+
+    var tail =
+      "\n# 함께 생성할 것\n" +
+      "- 제목 후보 3개 (클릭유도형 / 정보형 / 감성형)\n" +
+      "- 추천 태그 5~8개\n" +
+      "- 메타 설명용 한 줄 요약\n" +
+      "- 본문 내 [사진: 설명] 삽입 위치 제안\n";
+
+    return header + body + tail;
+  }
+
+  function render() {
+    var out = $("#output");
+    var text = build();
+    out.textContent = text;
+    // accent + labels
+    document.documentElement.style.setProperty("--accent", state.mode === "lab" ? "var(--lab)" : "var(--travel)");
+    $("#glyph").textContent = state.mode === "lab" ? "🧪" : "✈️";
+    $("#modeTag").textContent = "MODE · " + (state.mode === "lab" ? "AI 작업 실험실" : "여행");
+    save();
+  }
+
+  // hydrate inputs from state
+  $$("[data-k]").forEach(function (el) {
+    var k = el.getAttribute("data-k");
+    if (el.type === "checkbox") { el.checked = !!state[k]; }
+    else if (state[k] != null) { el.value = state[k]; }
+    var ev = (el.tagName === "SELECT" || el.type === "checkbox") ? "change" : "input";
+    el.addEventListener(ev, function () {
+      state[k] = el.type === "checkbox" ? el.checked : el.value;
+      render();
+    });
+  });
+
+  // mode buttons
+  $$(".mode-btn").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.mode = b.getAttribute("data-mode");
+      $$(".mode-btn").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+      $("#fields-lab").classList.toggle("hidden", state.mode !== "lab");
+      $("#fields-travel").classList.toggle("hidden", state.mode !== "travel");
+      render();
+    });
+  });
+  // init mode visibility
+  $$(".mode-btn").forEach(function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-mode") === state.mode); });
+  $("#fields-lab").classList.toggle("hidden", state.mode !== "lab");
+  $("#fields-travel").classList.toggle("hidden", state.mode !== "travel");
+
+  // region segmented
+  $$("#regionSeg button").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-region") === state.region);
+    b.addEventListener("click", function () {
+      state.region = b.getAttribute("data-region");
+      $$("#regionSeg button").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+      render();
+    });
+  });
+
+  // companion chips
+  $$("#companionChips .chip").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-companion") === state.companion);
+    b.addEventListener("click", function () {
+      state.companion = b.getAttribute("data-companion");
+      $$("#companionChips .chip").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+      render();
+    });
+  });
+
+  // ---- View toggle (초안 / 프롬프트) ----
+  function setView(v) {
+    $$("#viewSeg button").forEach(function (x) { x.setAttribute("aria-pressed", x.getAttribute("data-view") === v); });
+    $("#draftView").classList.toggle("hidden", v !== "draft");
+    $("#promptView").classList.toggle("hidden", v !== "prompt");
+    $("#draftActions").classList.toggle("hidden", v !== "draft");
+    $("#promptActions").classList.toggle("hidden", v !== "prompt");
+  }
+  $$("#viewSeg button").forEach(function (b) {
+    b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+  });
+
+  // ---- In-page generation ----
+  var hasAI = !!(window.claude && typeof window.claude.complete === "function");
+  if (!hasAI) {
+    $("#genHint").innerHTML = "이 환경에선 페이지 내 생성이 지원되지 않아요. <strong>프롬프트</strong> 탭에서 복사해 Claude에 붙여넣어 주세요.";
+    $("#genBtn").disabled = true;
+    $("#genBtn").style.opacity = ".55";
+    $("#genBtn").style.cursor = "not-allowed";
+  }
+
+  function mdToHtml(md) {
+    var esc = function (s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    var lines = md.replace(/\r/g, "").split("\n");
+    var html = "", listType = null;
+    function closeList() { if (listType) { html += "</" + listType + ">"; listType = null; } }
+    function inline(t) {
+      t = esc(t);
+      t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      t = t.replace(/\[사진:\s*([^\]]*)\]/g, '<span class="photo">📷 $1</span>');
+      return t;
+    }
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (/^\s*$/.test(ln)) { closeList(); continue; }
+      var h = ln.match(/^(#{1,3})\s+(.*)$/);
+      if (h) { closeList(); html += "<h" + h[1].length + ">" + inline(h[2]) + "</h" + h[1].length + ">"; continue; }
+      if (/^\s*[-*]\s+/.test(ln)) {
+        if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+        html += "<li>" + inline(ln.replace(/^\s*[-*]\s+/, "")) + "</li>"; continue;
+      }
+      if (/^\s*\d+\.\s+/.test(ln)) {
+        if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+        html += "<li>" + inline(ln.replace(/^\s*\d+\.\s+/, "")) + "</li>"; continue;
+      }
+      if (/^\s*---+\s*$/.test(ln)) { closeList(); html += "<hr>"; continue; }
+      closeList();
+      html += "<p>" + inline(ln) + "</p>";
+    }
+    closeList();
+    return html;
+  }
+
+  var lastDraft = "";
+  function generate() {
+    if (!hasAI) return;
+    // require the key field
+    if (state.mode === "lab" && !state.topic.trim()) { alert("먼저 '실험 주제'를 입력해 주세요."); return; }
+    if (state.mode === "travel" && !state.place.trim()) { alert("먼저 '여행지'를 입력해 주세요."); return; }
+
+    setView("draft");
+    $("#draftEmpty").classList.add("hidden");
+    $("#draftError").classList.add("hidden");
+    $("#draftResult").classList.add("hidden");
+    $("#draftLoading").classList.remove("hidden");
+    $("#genBtn").disabled = true;
+    $("#regenBtn").disabled = true;
+
+    var prompt = build() + "\n\n결과는 마크다운으로, 제목(#)부터 시작해서 본문·마감 요소까지 한 번에 작성해 주세요.";
+
+    window.claude.complete(prompt).then(function (text) {
+      lastDraft = text || "";
+      $("#draftLoading").classList.add("hidden");
+      $("#draftResult").innerHTML = mdToHtml(lastDraft);
+      $("#draftResult").classList.remove("hidden");
+      $("#copyDraftBtn").style.display = "";
+      $("#regenBtn").style.display = "";
+      $("#regenBtn").disabled = false;
+      $("#genBtn").disabled = false;
+    }).catch(function (e) {
+      $("#draftLoading").classList.add("hidden");
+      $("#draftError").innerHTML = "<strong>초안 생성에 실패했어요.</strong><br>잠시 후 다시 시도하거나, <strong>프롬프트</strong> 탭에서 복사해 Claude에 붙여넣어 주세요.";
+      $("#draftError").classList.remove("hidden");
+      $("#genBtn").disabled = false;
+      $("#regenBtn").disabled = false;
+    });
+  }
+  $("#genBtn").addEventListener("click", generate);
+  $("#regenBtn").addEventListener("click", generate);
+
+  $("#copyDraftBtn").addEventListener("click", function () {
+    var btn = this;
+    var done = function () {
+      btn.textContent = "복사됨 ✓";
+      setTimeout(function () { btn.textContent = "초안 복사"; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lastDraft).then(done, function () { fallbackCopy(lastDraft); done(); });
+    } else { fallbackCopy(lastDraft); done(); }
+  });
+
+  // copy prompt
+  $("#copyBtn").addEventListener("click", function () {
+    var btn = this;
+    var text = build();
+    var done = function () {
+      btn.textContent = "복사됨 ✓"; btn.classList.add("copied");
+      setTimeout(function () { btn.textContent = "복사"; btn.classList.remove("copied"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  });
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  // reset
+  $("#resetBtn").addEventListener("click", function () {
+    if (!confirm("입력한 내용을 모두 지울까요?")) return;
+    ["topic","tools","before","after","result","episode","place","period","theme","tepisode"].forEach(function (k) { state[k] = ""; });
+    state.info = true;
+    $$("[data-k]").forEach(function (el) {
+      var k = el.getAttribute("data-k");
+      if (el.type === "checkbox") el.checked = !!state[k];
+      else if (el.tagName !== "SELECT") el.value = state[k] || "";
+    });
+    render();
+  });
+
+  render();
+})();
+</script>
