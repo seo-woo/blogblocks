@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { initialState, type Mode, type State } from './types'
+import { emptyTravelContent, initialState, type Mode, type State } from './types'
 import LabFields from './lab/LabFields'
 import LabOutput from './lab/LabOutput'
-import TravelFields from './travel/TravelFields'
+import TravelPanel from './travel/TravelPanel'
 import TravelOutput from './travel/TravelOutput'
 
 const STORE = 'prompt-studio-v1'
@@ -16,6 +16,7 @@ function loadState(): State {
         ...saved,
         // 중첩 객체는 기본값 위에 병합 (구버전 저장분에 없는 섹션 키 보정)
         travelSections: { ...initialState.travelSections, ...(saved.travelSections || {}) },
+        travelContent: { ...emptyTravelContent, ...(saved.travelContent || {}) },
       }
     }
   } catch {
@@ -97,7 +98,7 @@ export default function App() {
 
             {state.mode === 'lab'
               ? <LabFields state={state} set={set} />
-              : <TravelFields state={state} set={set} />}
+              : <TravelPanel state={state} set={set} />}
 
             {/* Common: length */}
             <div className="field" style={{ marginTop: 16 }}>

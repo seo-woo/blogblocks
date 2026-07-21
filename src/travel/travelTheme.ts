@@ -4,17 +4,17 @@ import { companionNote } from '../lib/prompt'
 /**
  * 여행 카테고리 전용 HTML 테마 — 매거진 에디토리얼 스타일.
  *
- * 디자인 원칙:
- * - 테두리 카드/박스·배경 채움·그라데이션·그림자 전부 없음.
- * - 가운데 정렬 헤더 + `01 · 02` 번호 + 본문 + 풀와이드 이미지 + 얇은 구분선.
- * - 색(accent)은 아이브로우·번호·별점·버튼 등 작은 요소에만.
- * 인라인 스타일을 쓰는 이유: 티스토리 HTML 글쓰기에 붙여넣어도
- * <style> 블록이 잘리거나 스코프가 깨지지 않고 항상 같은 모양이 나오게 하기 위함.
+ * 렌더 모드 3가지:
+ * - 'template' : 대괄호 [자리표시자] (프롬프트/직접 채우기용)
+ * - 'preview'  : 예시 문구로 디자인 미리보기
+ * - 'filled'   : state.travelContent 의 실제 작성 내용 + 업로드 이미지로 완성
+ *
+ * 디자인은 인라인 스타일로 고정 → 티스토리 HTML 글쓰기에 붙여넣어도 항상 같은 모양.
  */
 
-type Mode = 'template' | 'preview'
+type Mode = 'template' | 'preview' | 'filled'
 
-// ---- 디자인 토큰 (한 곳에서만 바꾸면 전체 반영) ----
+// ---- 디자인 토큰 ----
 const FONT =
   "-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',Roboto,'Helvetica Neue',sans-serif"
 const ACCENT = '#d9633a'
@@ -31,8 +31,13 @@ const TD = `padding:11px 14px 11px 0;border-bottom:1px solid ${LINE};color:${SUB
 const DIVIDER = `<div style="border-top:1px solid ${LINE};margin:30px 0;"></div>`
 
 function esc(s: string): string {
-  return String(s)
+  return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function starStr(score: number): string {
+  const f = Math.max(0, Math.min(5, Math.round(score)))
+  return '★'.repeat(f) + '☆'.repeat(5 - f)
 }
 
 const TOC_TITLES: Partial<Record<TravelSectionKey, string>> = {
@@ -47,41 +52,54 @@ const TOC_TITLES: Partial<Record<TravelSectionKey, string>> = {
 }
 
 export function renderTravel(state: State, mode: Mode): string {
-  const val = (x: string, ph: string) => (x && x.trim() ? esc(x.trim()) : `[${ph}]`)
-  const fill = (ph: string, sample: string) =>
-    mode === 'template' ? `[${ph}]` : sample || `[${ph}]`
+  const C = state.travelContent
   const two = (i: number) => String(i).padStart(2, '0')
+  const clamp = (n: number) => Math.max(1, Math.min(6, Math.round(n || 1)))
+
+  // 아는 값(구성 탭의 여행 정보): 있으면 그대로, 없으면 자리표시자 (모든 모드 공통)
+  const val = (x: string, ph: string) => (x && x.trim() ? esc(x.trim()) : `[${ph}]`)
+  // 서술형: filled=작성값 / template=[자리] / preview=예시
+  const pick = (cv: string | undefined, ph: string, sample: string) =>
+    mode === 'template' ? `[${ph}]`
+      : mode === 'filled' ? ((cv || '').trim() ? esc(cv as string) : `[${ph}]`)
+        : (sample || `[${ph}]`)
+  // filled 전용: 값 있으면 esc, 없으면 [ph]
+  const fv = (cv: string | undefined, ph: string) => ((cv || '').trim() ? esc(cv as string) : `[${ph}]`)
 
   const place = val(state.place, '여행지')
   const region = esc(state.region)
   const companion = esc(state.companion)
-  const clamp = (n: number) => Math.max(1, Math.min(6, Math.round(n || 1)))
 
   const photo = (desc: string) =>
     `<div style="margin:16px 0 0;border:1px dashed ${LINE_STRONG};border-radius:8px;padding:30px 16px;text-align:center;color:${MUTED};font-size:13px;">📷 [사진: ${desc}]</div>`
+  const imgTag = (src: string, alt: string) =>
+    `<img src="${src}" alt="${esc(alt)}" style="width:100%;border-radius:8px;display:block;margin:16px 0 0;">`
+  const imgOrPhoto = (src: string | undefined, desc: string) =>
+    (mode === 'filled' && src) ? imgTag(src, desc) : photo(desc)
 
   const on = (k: TravelSectionKey) => state.travelSections[k]
   const sections: string[] = []
 
   // ---- Hero (가운데 정렬) ----
   if (on('hero')) {
-    const title = mode === 'template'
-      ? '[클릭을 부르는 제목 — 여행지·핵심 매력이 드러나게]'
-      : (state.theme.trim() ? esc(state.theme.trim()) : `${place}, ${companion}과 떠난 여행`)
-    const subtitle = fill(
-      '한 줄 소개 — 이 글에서 무엇을 얻어가는지',
-      `${companion}과 함께한 ${place}, 동선부터 비용까지 한 번에 정리했어요.`,
-    )
+    let title: string
+    if (mode === 'template') title = '[클릭을 부르는 제목 — 여행지·핵심 매력이 드러나게]'
+    else if (mode === 'filled') title = C.heroTitle.trim() ? esc(C.heroTitle) : (state.theme.trim() ? esc(state.theme) : '[제목]')
+    else title = state.theme.trim() ? esc(state.theme) : `${place}, ${companion}과 떠난 여행`
+    const subtitle = pick(C.heroSubtitle, '한 줄 소개 — 이 글에서 무엇을 얻어가는지',
+      `${companion}과 함께한 ${place}, 동선부터 비용까지 한 번에 정리했어요.`)
+    const heroImg = (mode === 'filled' && C.heroImage) ? imgTag(C.heroImage, `${place} 대표 이미지`) : ''
     sections.push(
       `<header style="text-align:center;padding:6px 0 4px;">` +
         `<div style="${EYEBROW}">TRAVEL · ${region}</div>` +
         `<h1 style="font-size:30px;line-height:1.3;margin:12px 0 12px;letter-spacing:-.03em;font-weight:800;color:${INK};">${title}</h1>` +
         `<p style="margin:0 auto;max-width:520px;color:${SUB};font-size:15px;">${subtitle}</p>` +
+        heroImg +
       `</header>`,
     )
   }
 
-  // ---- 요약 (박스 없이) ----
+  // ---- 요약 (구성 탭의 여행 정보 사용) ----
   if (on('summary')) {
     const fact = (label: string, value: string) =>
       `<div><div style="font-size:12px;color:${MUTED};margin-bottom:3px;">${label}</div>` +
@@ -99,7 +117,7 @@ export function renderTravel(state: State, mode: Mode): string {
     )
   }
 
-  // ---- 목차 (박스 없이) ----
+  // ---- 목차 ----
   if (on('toc')) {
     const items = TRAVEL_SECTIONS
       .filter((s) => on(s.key) && TOC_TITLES[s.key])
@@ -113,23 +131,33 @@ export function renderTravel(state: State, mode: Mode): string {
     )
   }
 
+  // 일정 정거장 데이터 (표/세로/2단 공통)
+  const PH_STOPS = [
+    ['[이모지]', '[시간]', '[장소]', '[메모]'],
+    ['[이모지]', '[시간]', '[장소]', '[메모]'],
+    ['[이모지]', '[시간]', '[장소]', '[메모]'],
+  ]
+  const SAMPLE_STOPS = [
+    ['☕', '09:30', '모닝 카페', '여유롭게 하루 시작'],
+    ['⛪', '11:00', '대표 명소', '이 도시의 상징'],
+    ['🍜', '13:00', '점심 맛집', '현지 별미 한 그릇'],
+    ['📸', '16:00', '전망대', '사진 스팟'],
+    ['🌆', '19:00', '야경 명소', '하루 마무리'],
+  ]
+  const stopRows: string[][] =
+    mode === 'filled'
+      ? (C.stops.length
+        ? C.stops.map((s) => [s.emoji ? esc(s.emoji) : '📍', fv(s.time, '시간'), fv(s.place, '장소'), s.memo ? esc(s.memo) : ''])
+        : PH_STOPS)
+      : mode === 'template' ? PH_STOPS : SAMPLE_STOPS
+
   // ---- 일정 (표 / 세로 / 2단) ----
   if (on('schedule')) {
     let inner: string
     const badge =
       `<div style="text-align:center;"><span style="display:inline-block;color:${ACCENT};font-weight:800;font-size:12.5px;letter-spacing:.14em;margin:0 0 18px;">DAY 1</span></div>`
-    const stopData: string[][] = mode === 'template'
-      ? [['[이모지]', '[시간]', '[장소]', '[메모]'],
-         ['[이모지]', '[시간]', '[장소]', '[메모]'],
-         ['[이모지]', '[시간]', '[장소]', '[메모]']]
-      : [['☕', '09:30', '모닝 카페', '여유롭게 하루 시작'],
-         ['⛪', '11:00', '대표 명소', '이 도시의 상징'],
-         ['🍜', '13:00', '점심 맛집', '현지 별미 한 그릇'],
-         ['📸', '16:00', '전망대', '사진 스팟'],
-         ['🌆', '19:00', '야경 명소', '하루 마무리']]
 
     if (state.scheduleStyle === 'grid') {
-      // 2단: 정거장 2개씩 (좁은 화면에선 flex-wrap 으로 1단)
       const cell = ([emoji, time, pl, memo]: string[]) =>
         `<div style="flex:1 1 46%;min-width:190px;box-sizing:border-box;display:flex;gap:11px;align-items:flex-start;padding:14px 0 6px;border-top:1px solid ${LINE};">` +
           `<span style="flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid ${ACCENT};display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;">${emoji}</span>` +
@@ -138,9 +166,8 @@ export function renderTravel(state: State, mode: Mode): string {
           (memo ? `<div style="color:${SUB};font-size:13.5px;margin-top:1px;">${memo}</div>` : '') +
           `</div>` +
         `</div>`
-      inner = badge + `<div style="display:flex;flex-wrap:wrap;gap:0 24px;">${stopData.map(cell).join('')}</div>`
+      inner = badge + `<div style="display:flex;flex-wrap:wrap;gap:0 24px;">${stopRows.map(cell).join('')}</div>`
     } else if (state.scheduleStyle === 'timeline') {
-      // 세로: 왼쪽 선 + 정거장
       const stop = ([emoji, time, pl, memo]: string[]) =>
         `<div style="position:relative;padding:0 0 22px 30px;">` +
           `<span style="position:absolute;left:-13px;top:0;width:24px;height:24px;border-radius:50%;border:2px solid ${ACCENT};background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1;">${emoji}</span>` +
@@ -148,96 +175,96 @@ export function renderTravel(state: State, mode: Mode): string {
           `<div style="font-weight:700;color:${INK};font-size:16px;">${pl}</div>` +
           (memo ? `<div style="color:${SUB};font-size:14px;margin-top:2px;">${memo}</div>` : '') +
         `</div>`
-      inner = badge + `<div style="position:relative;margin-left:12px;border-left:2px solid ${LINE};">${stopData.map(stop).join('')}</div>`
+      inner = badge + `<div style="position:relative;margin-left:12px;border-left:2px solid ${LINE};">${stopRows.map(stop).join('')}</div>`
     } else {
-      // 표
-      const row = ([, , pl, memo]: string[], route: string) =>
-        `<tr><td style="${TD}padding-left:0;font-weight:700;color:${INK};white-space:nowrap;">${pl}</td>` +
-        `<td style="${TD}">${route}</td><td style="${TD}padding-right:0;">${memo}</td></tr>`
-      const rows = mode === 'template'
-        ? row(['', '', '[1일차]', '[메모]'], '[오전 → 오후 → 저녁]') +
-          row(['', '', '[2일차]', '[메모]'], '[오전 → 오후 → 저녁]')
-        : row(['', '', '1일차', '도착 후 무리 없이'], '공항 → 숙소 → 야시장') +
-          row(['', '', '2일차', '핵심 코스'], '대표 명소 → 맛집 → 카페 → 전망대') +
-          row(['', '', '3일차', '여유롭게'], '아침 산책 → 기념품 → 공항')
+      const trow = ([, time, pl, memo]: string[]) =>
+        `<tr><td style="${TD}padding-left:0;font-weight:700;color:${INK};white-space:nowrap;">${time}</td>` +
+        `<td style="${TD}">${pl}</td><td style="${TD}padding-right:0;">${memo}</td></tr>`
       inner =
         `<table style="width:100%;border-collapse:collapse;font-size:15px;">` +
-          `<thead><tr><th style="${TH}padding-left:0;">일차</th><th style="${TH}">동선</th><th style="${TH}padding-right:0;">메모</th></tr></thead>` +
-          `<tbody>${rows}</tbody>` +
+          `<thead><tr><th style="${TH}padding-left:0;">시간</th><th style="${TH}">장소</th><th style="${TH}padding-right:0;">메모</th></tr></thead>` +
+          `<tbody>${stopRows.map(trow).join('')}</tbody>` +
         `</table>`
     }
     sections.push(`<section><h2 style="${H2}">🗓️ 일정 한눈에 보기</h2>${inner}</section>`)
   }
 
-  // ---- POI (장소/맛집/카페) — 번호 + 별점 + 본문 + 풀와이드 이미지 ----
-  // 다녀온 곳을 전부 소개하고 각각 별점을 매기는 형태.
+  // ---- POI (다녀온 장소/맛집/카페) — 번호 + 별점 + 본문 + 이미지 ----
   const ratingSamples: [string, string][] = [
     ['★★★★★', '5.0'], ['★★★★☆', '4.3'], ['★★★☆☆', '3.6'],
     ['★★★★☆', '4.0'], ['★★★★★', '4.8'], ['★★★☆☆', '3.4'],
   ]
-  const rating = (i: number) => {
-    const [st, sc] = mode === 'template'
-      ? ['★★★★☆', '[별점]']
-      : ratingSamples[(i - 1) % ratingSamples.length]
+  const ratingHtml = (i: number, cv?: string) => {
+    let st: string, sc: string
+    if (mode === 'template') { st = '★★★★☆'; sc = '[별점]' }
+    else if (mode === 'filled') {
+      const n = parseFloat(cv || '')
+      if (!isNaN(n) && n > 0) { st = starStr(n); sc = esc(cv as string) }
+      else { st = '★★★★☆'; sc = '[별점]' }
+    } else { [st, sc] = ratingSamples[(i - 1) % ratingSamples.length] }
     return `<div style="margin:0 0 10px;">` +
       `<span style="color:${ACCENT};letter-spacing:2px;font-size:14px;">${st}</span>` +
       `<span style="color:${MUTED};font-size:13px;margin-left:7px;">${sc}</span>` +
     `</div>`
   }
   const poiSection = (
+    key: 'spots' | 'restaurants' | 'cafes',
     count: number, heading: string, noun: string,
     feature: string, chip2: string, chip3: string,
   ) => {
     const isSpot = noun === '장소'
+    const list = C[key]
     const items: string[] = []
     for (let i = 1; i <= clamp(count); i++) {
+      const it = list[i - 1]
       const featureRow = feature
-        ? `<p style="margin:0 0 4px;color:${INK};font-weight:600;">${feature}: ${fill(`${feature} ${i}`, '현지에서 가장 유명한 메뉴')}</p>`
+        ? `<p style="margin:0 0 4px;color:${INK};font-weight:600;">${feature}: ${pick(it?.feature, `${feature} ${i}`, '현지에서 가장 유명한 메뉴')}</p>`
         : ''
       const meta =
         `<div style="margin:14px 0 0;color:${MUTED};font-size:13.5px;">` +
-        `📍 ${fill('위치', '중심가에서 도보 10분')} · ` +
-        `💵 ${fill(chip2, isSpot ? '무료' : '1~2만원')} · ` +
-        `⏱ ${fill(chip3, isSpot ? '1시간' : '11:00~21:00')}</div>`
+        `📍 ${pick(it?.loc, '위치', '중심가에서 도보 10분')} · ` +
+        `💵 ${pick(it?.price, chip2, isSpot ? '무료' : '1~2만원')} · ` +
+        `⏱ ${pick(it?.dur, chip3, isSpot ? '1시간' : '11:00~21:00')}</div>`
       items.push(
         `<article style="${i === 1 ? '' : `border-top:1px solid ${LINE};margin-top:26px;padding-top:26px;`}">` +
           `<h3 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;color:${INK};">` +
-            `<span style="color:${ACCENT};">${two(i)}</span> ${fill(`${noun} 이름 ${i}`, `${noun === '장소' ? '방문지' : noun} ${i}`)}</h3>` +
-          rating(i) +
+            `<span style="color:${ACCENT};">${two(i)}</span> ${pick(it?.name, `${noun} 이름 ${i}`, `${noun === '장소' ? '방문지' : noun} ${i}`)}</h3>` +
+          ratingHtml(i, it?.rating) +
           featureRow +
-          `<p style="margin:0;color:${SUB};">${fill('솔직 후기·분위기·팁 (2~3문장)', '분위기가 좋고 사진 찍기 좋았어요. 오전 일찍 가면 한적합니다.')}</p>` +
+          `<p style="margin:0;color:${SUB};">${pick(it?.review, '솔직 후기·분위기·팁 (2~3문장)', '분위기가 좋고 사진 찍기 좋았어요. 오전 일찍 가면 한적합니다.')}</p>` +
           meta +
-          photo(`${noun} ${i} 사진`) +
+          imgOrPhoto(it?.image, `${noun} ${i} 사진`) +
         `</article>`,
       )
     }
     return `<section><h2 style="${H2}">${heading}</h2>${items.join('')}</section>`
   }
 
-  if (on('spots')) sections.push(poiSection(state.spotCount, '📍 다녀온 곳', '장소', '', '입장료', '소요시간'))
-  if (on('restaurants')) sections.push(poiSection(state.restCount, '🍜 다녀온 맛집', '맛집', '대표메뉴', '가격대', '영업시간'))
-  if (on('cafes')) sections.push(poiSection(state.cafeCount, '☕ 다녀온 카페', '카페', '시그니처', '가격대', '영업시간'))
+  if (on('spots')) sections.push(poiSection('spots', state.spotCount, '📍 다녀온 곳', '장소', '', '입장료', '소요시간'))
+  if (on('restaurants')) sections.push(poiSection('restaurants', state.restCount, '🍜 다녀온 맛집', '맛집', '대표메뉴', '가격대', '영업시간'))
+  if (on('cafes')) sections.push(poiSection('cafes', state.cafeCount, '☕ 다녀온 카페', '카페', '시그니처', '가격대', '영업시간'))
 
   // ---- 비용 ----
   if (on('cost')) {
-    const crow = (item: string, amount: string, memo: string) =>
+    const PH_COST = [['교통', '[금액]', '[항공/기차]'], ['숙박', '[금액]', '[0박]'], ['식비', '[금액]', ''], ['입장·기타', '[금액]', '']]
+    const SAMPLE_COST = [['교통', '00만원', '항공/기차'], ['숙박', '00만원', '0박'], ['식비', '00만원', ''], ['입장·기타', '00만원', '']]
+    const costRows =
+      mode === 'filled'
+        ? (C.costRows.length ? C.costRows.map((r) => [fv(r.item, '항목'), fv(r.amount, '금액'), r.memo ? esc(r.memo) : '']) : PH_COST)
+        : mode === 'template' ? PH_COST : SAMPLE_COST
+    const crow = ([item, amount, memo]: string[]) =>
       `<tr><td style="${TD}padding-left:0;color:${INK};">${item}</td>` +
       `<td style="${TD}text-align:right;white-space:nowrap;">${amount}</td>` +
       `<td style="${TD}padding-right:0;">${memo}</td></tr>`
-    const rows =
-      crow('교통', fill('금액', '00만원'), fill('메모', '항공/기차')) +
-      crow('숙박', fill('금액', '00만원'), fill('메모', '0박')) +
-      crow('식비', fill('금액', '00만원'), fill('메모', '')) +
-      crow('입장·기타', fill('금액', '00만원'), fill('메모', ''))
     sections.push(
       `<section>` +
         `<h2 style="${H2}">💰 예상 비용</h2>` +
         `<table style="width:100%;border-collapse:collapse;font-size:15px;">` +
           `<thead><tr><th style="${TH}padding-left:0;">항목</th><th style="${TH}text-align:right;">금액</th><th style="${TH}padding-right:0;">메모</th></tr></thead>` +
-          `<tbody>${rows}` +
+          `<tbody>${costRows.map(crow).join('')}` +
             `<tr><td style="${TD}padding-left:0;border-bottom:none;border-top:2px solid ${LINE_STRONG};font-weight:800;color:${INK};">합계</td>` +
-            `<td style="${TD}text-align:right;border-bottom:none;border-top:2px solid ${LINE_STRONG};font-weight:800;color:${ACCENT};">${fill('총액', '000만원')}</td>` +
-            `<td style="${TD}padding-right:0;border-bottom:none;border-top:2px solid ${LINE_STRONG};">${fill('1인 기준 등', '1인 기준')}</td></tr>` +
+            `<td style="${TD}text-align:right;border-bottom:none;border-top:2px solid ${LINE_STRONG};font-weight:800;color:${ACCENT};">${pick(C.costTotal, '총액', '000만원')}</td>` +
+            `<td style="${TD}padding-right:0;border-bottom:none;border-top:2px solid ${LINE_STRONG};">${pick(C.costTotalMemo, '1인 기준 등', '1인 기준')}</td></tr>` +
           `</tbody>` +
         `</table>` +
       `</section>`,
@@ -246,49 +273,59 @@ export function renderTravel(state: State, mode: Mode): string {
 
   // ---- 꿀팁 ----
   if (on('tips')) {
-    const tips = mode === 'template'
-      ? '<li>[꿀팁 1]</li><li>[꿀팁 2]</li><li>[꿀팁 3]</li>'
-      : '<li>예약은 최소 2주 전에 하는 게 좋아요.</li><li>현지 교통패스를 미리 사두면 편합니다.</li><li>오전 일찍 움직이면 붐비지 않아요.</li>'
+    const PH_TIPS = ['[꿀팁 1]', '[꿀팁 2]', '[꿀팁 3]']
+    const SAMPLE_TIPS = ['예약은 최소 2주 전에 하는 게 좋아요.', '현지 교통패스를 미리 사두면 편합니다.', '오전 일찍 움직이면 붐비지 않아요.']
+    const tipsArr =
+      mode === 'filled'
+        ? (C.tips.filter((t) => t && t.trim()).length ? C.tips.filter((t) => t && t.trim()).map(esc) : PH_TIPS)
+        : mode === 'template' ? PH_TIPS : SAMPLE_TIPS
     sections.push(
       `<section>` +
         `<h2 style="${H2}">🧭 가기 전 꿀팁</h2>` +
-        `<ul style="margin:0;padding-left:20px;color:${SUB};line-height:1.95;">${tips}</ul>` +
+        `<ul style="margin:0;padding-left:20px;color:${SUB};line-height:1.95;">${tipsArr.map((t) => `<li>${t}</li>`).join('')}</ul>` +
       `</section>`,
     )
   }
 
   // ---- FAQ ----
   if (on('faq')) {
-    const qa = (q: string, a: string, first: boolean) =>
-      `<div style="padding:16px 0;${first ? '' : `border-top:1px solid ${LINE};`}">` +
+    const PH_FAQ = [['[자주 묻는 질문 1]', '[답변 1]'], ['[자주 묻는 질문 2]', '[답변 2]']]
+    const SAMPLE_FAQ = [['며칠 일정이 적당한가요?', '2박 3일이면 핵심은 다 볼 수 있어요.'], ['아이와 가도 괜찮나요?', '동선이 짧아 부담 없이 다닐 수 있습니다.']]
+    const faqArr =
+      mode === 'filled'
+        ? (C.faq.filter((f) => f && (f.q || f.a)).length ? C.faq.filter((f) => f && (f.q || f.a)).map((f) => [fv(f.q, '질문'), fv(f.a, '답변')]) : PH_FAQ)
+        : mode === 'template' ? PH_FAQ : SAMPLE_FAQ
+    const items = faqArr.map(([q, a], idx) =>
+      `<div style="padding:16px 0;${idx === 0 ? '' : `border-top:1px solid ${LINE};`}">` +
         `<div style="font-weight:700;color:${INK};margin-bottom:6px;">Q. ${q}</div>` +
         `<div style="color:${SUB};">A. ${a}</div>` +
-      `</div>`
-    const items = mode === 'template'
-      ? qa('[자주 묻는 질문 1]', '[답변 1]', true) + qa('[자주 묻는 질문 2]', '[답변 2]', false)
-      : qa('며칠 일정이 적당한가요?', '2박 3일이면 핵심은 다 볼 수 있어요.', true) +
-        qa('아이와 가도 괜찮나요?', '동선이 짧아 부담 없이 다닐 수 있습니다.', false)
+      `</div>`).join('')
     sections.push(`<section><h2 style="${H2}">❓ 자주 묻는 질문</h2>${items}</section>`)
   }
 
   // ---- 총평 ----
   if (on('verdict')) {
+    let vStars = '★★★★☆'
+    if (mode === 'filled') {
+      const n = parseFloat(C.verdictScore)
+      if (!isNaN(n) && n > 0) vStars = starStr(n)
+    }
     sections.push(
       `<section>` +
         `<h2 style="${H2}">✍️ 총평</h2>` +
-        `<div style="font-size:15px;color:${ACCENT};font-weight:800;margin-bottom:8px;">★★★★☆ ${fill('한 줄 총평', '다시 가고 싶은 여행지')}</div>` +
-        `<p style="margin:0;color:${SUB};">${fill('전체 총평 2~3문장', '기대 이상으로 만족스러웠던 여행이에요. 동선이 편해 체력 부담도 적었습니다.')}</p>` +
-        `<p style="margin:12px 0 0;color:${SUB};"><strong style="color:${INK};">이런 분께 추천:</strong> ${fill('추천 대상', companionNote[state.companion])}</p>` +
+        `<div style="font-size:15px;color:${ACCENT};font-weight:800;margin-bottom:8px;">${vStars} ${pick(C.verdictOne, '한 줄 총평', '다시 가고 싶은 여행지')}</div>` +
+        `<p style="margin:0;color:${SUB};">${pick(C.verdictBody, '전체 총평 2~3문장', '기대 이상으로 만족스러웠던 여행이에요. 동선이 편해 체력 부담도 적었습니다.')}</p>` +
+        `<p style="margin:12px 0 0;color:${SUB};"><strong style="color:${INK};">이런 분께 추천:</strong> ${pick(C.verdictTarget, '추천 대상', companionNote[state.companion])}</p>` +
       `</section>`,
     )
   }
 
-  // ---- CTA (가운데 정렬) ----
+  // ---- CTA ----
   if (on('cta')) {
     sections.push(
       `<section style="text-align:center;">` +
-        `<div style="font-size:18px;font-weight:800;margin-bottom:6px;color:${INK};">${fill('구독/공감 유도 문구', '도움이 되었다면 공감·구독 부탁드려요 🙌')}</div>` +
-        `<p style="margin:0 0 16px;color:${MUTED};font-size:14px;">${fill('다음 글 예고 한 줄', '다음 글에서는 또 다른 여행지로 찾아올게요.')}</p>` +
+        `<div style="font-size:18px;font-weight:800;margin-bottom:6px;color:${INK};">${pick(C.ctaHeading, '구독/공감 유도 문구', '도움이 되었다면 공감·구독 부탁드려요 🙌')}</div>` +
+        `<p style="margin:0 0 16px;color:${MUTED};font-size:14px;">${pick(C.ctaSub, '다음 글 예고 한 줄', '다음 글에서는 또 다른 여행지로 찾아올게요.')}</p>` +
         `<span style="display:inline-block;background:${ACCENT};color:#fff;font-weight:700;border-radius:999px;padding:11px 22px;font-size:15px;">＋ 구독하기</span>` +
       `</section>`,
     )
@@ -299,6 +336,19 @@ export function renderTravel(state: State, mode: Mode): string {
     sections.join(DIVIDER) +
     `</div>`
   )
+}
+
+/** 직접 작성한 내용이 하나라도 있는지 (미리보기·복사 모드 결정용) */
+export function hasTravelContent(s: State): boolean {
+  const c = s.travelContent
+  if (c.heroTitle || c.heroSubtitle || c.heroImage) return true
+  if (c.verdictOne || c.verdictBody || c.verdictTarget || c.verdictScore) return true
+  if (c.ctaHeading || c.ctaSub || c.costTotal || c.costTotalMemo) return true
+  if (c.stops.length || c.costRows.length || c.faq.length) return true
+  if (c.tips.some((t) => t && t.trim())) return true
+  if ([c.spots, c.restaurants, c.cafes].some((arr) =>
+    arr.some((p) => p && (p.name || p.review || p.image || p.rating || p.feature || p.loc || p.price || p.dur)))) return true
+  return false
 }
 
 /** iframe 미리보기용 전체 문서로 감싸기 */

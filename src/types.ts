@@ -29,6 +29,39 @@ export const TRAVEL_SECTIONS: TravelSectionDef[] = [
   { key: 'cta', label: 'CTA (구독 유도)' },
 ]
 
+// 스튜디오에서 직접 작성하는 실제 내용 (HTML을 몰라도 칸만 채우면 됨)
+export interface Stop { emoji: string; time: string; place: string; memo: string }
+export interface Poi {
+  name: string; rating: string; feature: string; review: string
+  loc: string; price: string; dur: string; image: string
+}
+export interface CostRow { item: string; amount: string; memo: string }
+export interface Faq { q: string; a: string }
+
+export interface TravelContent {
+  heroTitle: string; heroSubtitle: string; heroImage: string
+  stops: Stop[]
+  spots: Poi[]; restaurants: Poi[]; cafes: Poi[]
+  costRows: CostRow[]; costTotal: string; costTotalMemo: string
+  tips: string[]
+  faq: Faq[]
+  verdictScore: string; verdictOne: string; verdictBody: string; verdictTarget: string
+  ctaHeading: string; ctaSub: string
+}
+
+export const emptyPoi: Poi = {
+  name: '', rating: '', feature: '', review: '', loc: '', price: '', dur: '', image: '',
+}
+export const emptyStop: Stop = { emoji: '', time: '', place: '', memo: '' }
+export const emptyTravelContent: TravelContent = {
+  heroTitle: '', heroSubtitle: '', heroImage: '',
+  stops: [], spots: [], restaurants: [], cafes: [],
+  costRows: [], costTotal: '', costTotalMemo: '',
+  tips: [], faq: [],
+  verdictScore: '', verdictOne: '', verdictBody: '', verdictTarget: '',
+  ctaHeading: '', ctaSub: '',
+}
+
 export interface State {
   mode: Mode
   region: Region
@@ -53,6 +86,8 @@ export interface State {
   restCount: number
   cafeCount: number
   scheduleStyle: 'table' | 'timeline' | 'grid'
+  // 직접 작성한 내용 (비어 있으면 예시/자리표시자로 렌더)
+  travelContent: TravelContent
 }
 
 export const initialState: State = {
@@ -71,4 +106,5 @@ export const initialState: State = {
   restCount: 2,
   cafeCount: 1,
   scheduleStyle: 'grid',
+  travelContent: emptyTravelContent,
 }

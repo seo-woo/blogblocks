@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { State } from '../types'
-import { buildTravelPrompt, renderTravel, wrapPreviewDoc } from './travelTheme'
+import { buildTravelPrompt, hasTravelContent, renderTravel, wrapPreviewDoc } from './travelTheme'
 import { copyText } from '../lib/clipboard'
 
 type OutView = 'preview' | 'prompt'
@@ -27,6 +27,8 @@ export default function TravelOutput({ state, hasAI }: { state: State; hasAI: bo
   const prompt = useMemo(() => buildTravelPrompt(state), [state])
   const previewHtml = useMemo(() => renderTravel(state, 'preview'), [state])
   const templateHtml = useMemo(() => renderTravel(state, 'template'), [state])
+  const filledHtml = useMemo(() => renderTravel(state, 'filled'), [state])
+  const hasContent = useMemo(() => hasTravelContent(state), [state])
 
   // 입력·섹션이 바뀌면 AI 결과는 더 이상 정확하지 않으므로 초기화 → 미리보기가 항상 현재 선택을 반영
   const signature = JSON.stringify({
@@ -40,10 +42,10 @@ export default function TravelOutput({ state, hasAI }: { state: State; hasAI: bo
     setStatus('idle')
   }, [signature])
 
-  const shownHtml = aiHtml ?? previewHtml
+  // 우선순위: 직접 작성한 내용 > AI 결과 > 예시(미리보기)/빈 템플릿(복사)
+  const shownHtml = hasContent ? filledHtml : (aiHtml ?? previewHtml)
   const doc = useMemo(() => wrapPreviewDoc(shownHtml), [shownHtml])
-  // 복사 대상: AI가 채웠으면 그 결과, 아니면 자리표시자 템플릿(직접 채우기용)
-  const htmlToCopy = aiHtml ?? templateHtml
+  const htmlToCopy = hasContent ? filledHtml : (aiHtml ?? templateHtml)
 
   function generate() {
     if (!hasAI) return
@@ -121,11 +123,13 @@ export default function TravelOutput({ state, hasAI }: { state: State; hasAI: bo
               srcDoc={doc}
             />
             <p className="preview-note">
-              {aiHtml
-                ? '✅ AI가 채운 완성본입니다. ‘HTML 복사’ → 티스토리 HTML 편집기에 붙여넣으세요.'
-                : hasAI
-                  ? '지금은 디자인 미리보기(예시 문구)예요. ‘AI로 채우기’를 누르면 실제 내용이 채워집니다.'
-                  : '이 환경에선 AI 채우기가 안 돼요. ‘HTML 복사’로 빈 템플릿을 받아 직접 채우거나, ‘프롬프트’ 탭을 복사해 Claude에 붙여넣으세요.'}
+              {hasContent
+                ? '✅ ‘내용 작성’ 탭에 입력한 내용으로 완성된 미리보기예요. ‘HTML 복사’ → 티스토리 HTML 편집기에 붙여넣으세요. (빈 칸은 [ ]로 표시됩니다)'
+                : aiHtml
+                  ? '✅ AI가 채운 완성본입니다. ‘HTML 복사’ → 티스토리 HTML 편집기에 붙여넣으세요.'
+                  : hasAI
+                    ? '지금은 디자인 미리보기(예시 문구)예요. ‘내용 작성’ 탭에서 직접 채우거나 ‘AI로 채우기’를 누르세요.'
+                    : '‘내용 작성’ 탭에서 칸을 채우면 여기 완성 HTML이 만들어져요. 또는 ‘HTML 복사’로 빈 템플릿을 받거나 ‘프롬프트’ 탭을 Claude에 붙여넣으세요.'}
             </p>
           </div>
         ) : (
