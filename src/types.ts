@@ -3,6 +3,27 @@ export type Region = '국내' | '해외'
 export type Companion = '혼자' | '짝꿍' | '가족' | '부모님'
 export type View = 'draft' | 'prompt'
 
+/** 여행 HTML 포인트 컬러 프리셋 */
+export type TravelAccentId =
+  | 'terracotta' | 'ocean' | 'forest' | 'wine' | 'charcoal' | 'sand'
+
+export const TRAVEL_ACCENTS: ReadonlyArray<{
+  id: TravelAccentId
+  label: string
+  color: string
+}> = [
+  { id: 'terracotta', label: '테라코타', color: '#d9633a' },
+  { id: 'ocean', label: '오션', color: '#2a6f97' },
+  { id: 'forest', label: '포레스트', color: '#3d6b4f' },
+  { id: 'wine', label: '와인', color: '#8b3a4a' },
+  { id: 'charcoal', label: '차콜', color: '#3d4450' },
+  { id: 'sand', label: '샌드', color: '#b08968' },
+]
+
+export function travelAccentColor(id: TravelAccentId | string | undefined): string {
+  return TRAVEL_ACCENTS.find((a) => a.id === id)?.color ?? TRAVEL_ACCENTS[0].color
+}
+
 export type TravelSectionKey =
   | 'hero' | 'summary' | 'toc' | 'schedule' | 'spots'
   | 'restaurants' | 'cafes' | 'cost' | 'tips' | 'faq' | 'verdict' | 'cta'
@@ -20,7 +41,7 @@ export const TRAVEL_SECTIONS: TravelSectionDef[] = [
   { key: 'toc', label: '목차' },
   { key: 'schedule', label: '일정표' },
   { key: 'spots', label: '관광지 / 장소', countKey: 'spotCount' },
-  { key: 'restaurants', label: '맛집', countKey: 'restCount' },
+  { key: 'restaurants', label: '음식점', countKey: 'restCount' },
   { key: 'cafes', label: '카페', countKey: 'cafeCount' },
   { key: 'cost', label: '비용' },
   { key: 'tips', label: '꿀팁' },
@@ -31,15 +52,23 @@ export const TRAVEL_SECTIONS: TravelSectionDef[] = [
 
 // 스튜디오에서 직접 작성하는 실제 내용 (HTML을 몰라도 칸만 채우면 됨)
 export interface Stop { emoji: string; time: string; place: string; memo: string }
+
+/** 업로드 사진 + 4:3 크롭 위치 (object-position %, 기본 50/50) */
+export interface TravelImage {
+  src: string
+  x: number
+  y: number
+}
+
 export interface Poi {
   name: string; rating: string; feature: string; review: string
-  loc: string; price: string; dur: string; image: string
+  loc: string; price: string; dur: string; images: TravelImage[]
 }
 export interface CostRow { item: string; amount: string; memo: string }
 export interface Faq { q: string; a: string }
 
 export interface TravelContent {
-  heroTitle: string; heroSubtitle: string; heroImage: string
+  heroTitle: string; heroSubtitle: string; heroImages: TravelImage[]
   stops: Stop[]
   spots: Poi[]; restaurants: Poi[]; cafes: Poi[]
   costRows: CostRow[]; costTotal: string; costTotalMemo: string
@@ -49,17 +78,78 @@ export interface TravelContent {
   ctaHeading: string; ctaSub: string
 }
 
+/** 장소/히어로당 최대 사진 수 (용량·붙여넣기 부담 완화) */
+export const MAX_IMAGES = 6
+
+export function clampPos(n: number): number {
+  if (typeof n !== 'number' || Number.isNaN(n)) return 50
+  return Math.max(0, Math.min(100, Math.round(n)))
+}
+
+export function toTravelImage(v: unknown): TravelImage | null {
+  if (typeof v === 'string' && v) return { src: v, x: 50, y: 50 }
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    if (typeof o.src === 'string' && o.src) {
+      return { src: o.src, x: clampPos(Number(o.x)), y: clampPos(Number(o.y)) }
+    }
+  }
+  return null
+}
+
 export const emptyPoi: Poi = {
-  name: '', rating: '', feature: '', review: '', loc: '', price: '', dur: '', image: '',
+  name: '', rating: '', feature: '', review: '', loc: '', price: '', dur: '', images: [],
 }
 export const emptyStop: Stop = { emoji: '', time: '', place: '', memo: '' }
 export const emptyTravelContent: TravelContent = {
-  heroTitle: '', heroSubtitle: '', heroImage: '',
+  heroTitle: '', heroSubtitle: '', heroImages: [],
   stops: [], spots: [], restaurants: [], cafes: [],
   costRows: [], costTotal: '', costTotalMemo: '',
   tips: [], faq: [],
   verdictScore: '', verdictOne: '', verdictBody: '', verdictTarget: '',
   ctaHeading: '', ctaSub: '',
+}
+
+/** 구버전(heroImage / image 단일 문자열·string[]) → TravelImage[] 보정 */
+export function migrateTravelContent(raw: Partial<TravelContent> & {
+  heroImage?: string
+}): TravelContent {
+  const asImages = (v: unknown, legacy?: string): TravelImage[] => {
+    if (Array.isArray(v)) {
+      return v.map(toTravelImage).filter((x): x is TravelImage => !!x)
+    }
+    if (typeof legacy === 'string' && legacy) return [{ src: legacy, x: 50, y: 50 }]
+    return []
+  }
+  const migratePoi = (list: unknown): Poi[] => {
+    if (!Array.isArray(list)) return []
+    return list.map((p) => {
+      const o = (p && typeof p === 'object') ? p as Record<string, unknown> : {}
+      return {
+        ...emptyPoi,
+        name: String(o.name ?? ''),
+        rating: String(o.rating ?? ''),
+        feature: String(o.feature ?? ''),
+        review: String(o.review ?? ''),
+        loc: String(o.loc ?? ''),
+        price: String(o.price ?? ''),
+        dur: String(o.dur ?? ''),
+        images: asImages(o.images, typeof o.image === 'string' ? o.image : undefined),
+      }
+    })
+  }
+  return {
+    ...emptyTravelContent,
+    ...raw,
+    heroImages: asImages(raw.heroImages, raw.heroImage),
+    stops: Array.isArray(raw.stops) ? raw.stops : [],
+    spots: migratePoi(raw.spots),
+    restaurants: migratePoi(raw.restaurants),
+    cafes: migratePoi(raw.cafes),
+    costRows: Array.isArray(raw.costRows) ? raw.costRows : [],
+    tips: Array.isArray(raw.tips) ? raw.tips : [],
+    faq: Array.isArray(raw.faq) ? raw.faq : [],
+  }
 }
 
 export interface State {
@@ -86,6 +176,7 @@ export interface State {
   restCount: number
   cafeCount: number
   scheduleStyle: 'table' | 'timeline' | 'grid'
+  travelAccent: TravelAccentId
   // 직접 작성한 내용 (비어 있으면 예시/자리표시자로 렌더)
   travelContent: TravelContent
 }
@@ -106,5 +197,6 @@ export const initialState: State = {
   restCount: 2,
   cafeCount: 1,
   scheduleStyle: 'grid',
+  travelAccent: 'terracotta',
   travelContent: emptyTravelContent,
 }

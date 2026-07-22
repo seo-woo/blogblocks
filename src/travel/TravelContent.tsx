@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import {
-  emptyPoi, emptyStop, type Poi, type State, type TravelContent as TC,
+  clampPos, emptyPoi, emptyStop, MAX_IMAGES,
+  type Poi, type State, type TravelContent as TC, type TravelImage,
 } from '../types'
 import { fileToDataUrl } from '../lib/image'
 
@@ -31,8 +32,8 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
             <textarea value={C.heroSubtitle} placeholder="이 글에서 무엇을 얻어가는지"
               onChange={(e) => setC({ heroSubtitle: e.target.value })} />
           </Field>
-          <Field label="대표 이미지 (선택)">
-            <ImageInput value={C.heroImage} onChange={(v) => setC({ heroImage: v })} />
+          <Field label="대표 이미지 (여러 장 가능)">
+            <ImageInput value={C.heroImages} onChange={(v) => setC({ heroImages: v })} />
           </Field>
         </Group>
       )}
@@ -62,7 +63,7 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
       )}
 
       {on('spots') && <PoiGroup title="다녀온 곳" pkey="spots" count={state.spotCount} C={C} setC={setC} />}
-      {on('restaurants') && <PoiGroup title="다녀온 맛집" pkey="restaurants" count={state.restCount} C={C} setC={setC} feature="대표메뉴" />}
+      {on('restaurants') && <PoiGroup title="다녀온 음식점" pkey="restaurants" count={state.restCount} C={C} setC={setC} feature="대표메뉴" />}
       {on('cafes') && <PoiGroup title="다녀온 카페" pkey="cafes" count={state.cafeCount} C={C} setC={setC} feature="시그니처" />}
 
       {on('cost') && (
@@ -198,7 +199,7 @@ function PoiGroup({ title, pkey, count, C, setC, feature }: {
           <input type="text" value={it.dur} placeholder={feature ? '영업시간' : '소요시간'}
             onChange={(e) => setPoi(i, { dur: e.target.value })} />
         </div>
-        <ImageInput value={it.image} onChange={(v) => setPoi(i, { image: v })} />
+        <ImageInput value={it.images} onChange={(v) => setPoi(i, { images: v })} />
       </div>,
     )
   }
@@ -210,30 +211,151 @@ function PoiGroup({ title, pkey, count, C, setC, feature }: {
   )
 }
 
-function ImageInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function ImageInput({ value, onChange }: {
+  value: TravelImage[]
+  onChange: (v: TravelImage[]) => void
+}) {
   const [busy, setBusy] = useState(false)
-  if (value) {
-    return (
-      <div className="img-prev">
-        <img src={value} alt="업로드" />
-        <button className="rm" onClick={() => onChange('')}>사진 제거</button>
-      </div>
-    )
+  const [err, setErr] = useState('')
+  const list = value || []
+  const room = Math.max(0, MAX_IMAGES - list.length)
+
+  async function handleFiles(files: FileList | null) {
+    if (!files?.length || room <= 0) return
+    setBusy(true)
+    setErr('')
+    try {
+      const picked = Array.from(files).slice(0, room)
+      const next: TravelImage[] = []
+      for (const f of picked) {
+        next.push({ src: await fileToDataUrl(f), x: 50, y: 50 })
+      }
+      onChange([...list, ...next])
+    } catch {
+      setErr('이미지를 처리하지 못했어요. 다른 파일로 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
+    }
   }
+
+  function patchAt(i: number, patch: Partial<TravelImage>) {
+    onChange(list.map((im, xi) => (xi === i ? { ...im, ...patch } : im)))
+  }
+
+  function removeAt(i: number) {
+    onChange(list.filter((_, x) => x !== i))
+  }
+
   return (
-    <label className="upload">
-      {busy ? '처리 중…' : '📷 이미지 업로드'}
-      <input
-        type="file" accept="image/*" hidden
-        onChange={async (e) => {
-          const f = e.target.files?.[0]
-          if (!f) return
-          setBusy(true)
-          try { onChange(await fileToDataUrl(f)) } catch { /* ignore */ }
-          finally { setBusy(false); e.target.value = '' }
-        }}
+    <div className="img-gallery">
+      {list.length > 0 && (
+        <div className="img-thumbs">
+          {list.map((im, i) => (
+            <div className="img-thumb" key={`${im.src.slice(-24)}-${im.src.length}`}>
+              <ImageReposition
+                image={im}
+                onPos={(x, y) => patchAt(i, { x, y })}
+              />
+              <button type="button" className="rm" onClick={() => removeAt(i)}>삭제</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {room > 0 && (
+        <label className="upload">
+          {busy
+            ? '처리 중…'
+            : list.length
+              ? `📷 사진 추가 (남은 ${room}장)`
+              : '📷 이미지 업로드 (여러 장)'}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            disabled={busy}
+            onChange={async (e) => {
+              await handleFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </label>
+      )}
+      {list.length > 0 && (
+        <p className="content-hint sm">
+          사진은 4:3으로 잘려요. 프레임을 <strong>드래그</strong>해서 보이는 위치를 조정하세요.
+          {list.length > 1 ? ' 여러 장이면 슬라이드로 보여요.' : ''}
+        </p>
+      )}
+      {err && <p className="content-hint sm" style={{ color: '#c0392b' }}>{err}</p>}
+    </div>
+  )
+}
+
+function ImageReposition({
+  image,
+  onPos,
+}: {
+  image: TravelImage
+  onPos: (x: number, y: number) => void
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  const drag = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    originX: number
+    originY: number
+  } | null>(null)
+
+  function handlePointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    e.preventDefault()
+    drag.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: image.x,
+      originY: image.y,
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function handlePointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const d = drag.current
+    const el = frameRef.current
+    if (!d || d.pointerId !== e.pointerId || !el) return
+    const rect = el.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    // 손가락을 오른쪽으로 밀면 사진도 오른쪽으로 → 초점(x)은 왼쪽(감소)
+    const dx = ((e.clientX - d.startX) / rect.width) * 100
+    const dy = ((e.clientY - d.startY) / rect.height) * 100
+    onPos(clampPos(d.originX - dx), clampPos(d.originY - dy))
+  }
+
+  function handlePointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    if (drag.current?.pointerId === e.pointerId) drag.current = null
+  }
+
+  return (
+    <div
+      ref={frameRef}
+      className="img-frame"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      role="img"
+      aria-label="드래그해서 사진 위치 조정"
+      title="드래그해서 위치 조정"
+    >
+      <img
+        src={image.src}
+        alt=""
+        draggable={false}
+        style={{ objectPosition: `${image.x}% ${image.y}%` }}
       />
-    </label>
+      <span className="img-frame-hint">드래그로 위치 조정</span>
+    </div>
   )
 }
 

@@ -1,4 +1,4 @@
-import { TRAVEL_SECTIONS, type Region, type State } from '../types'
+import { TRAVEL_ACCENTS, TRAVEL_SECTIONS, type Region, type State } from '../types'
 
 type Setter = <K extends keyof State>(key: K, value: State[K]) => void
 
@@ -70,12 +70,48 @@ export default function TravelFields({ state, set }: { state: State; set: Setter
       </div>
 
       <div className="field">
+        <label>테마 색</label>
+        <div className="color-swatches">
+          {TRAVEL_ACCENTS.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className="color-swatch"
+              aria-pressed={state.travelAccent === a.id}
+              aria-label={a.label}
+              title={a.label}
+              style={{ background: a.color }}
+              onClick={() => set('travelAccent', a.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
         <label>꼭 넣을 장소 / 에피소드</label>
         <textarea
           value={state.tepisode}
           onChange={(e) => set('tepisode', e.target.value)}
           placeholder="가장 기억에 남은 순간"
         />
+      </div>
+
+      <div className="field">
+        <label>실용 정보 (비용·동선·예약)</label>
+        <div className="seg">
+          <button
+            aria-pressed={state.info}
+            onClick={() => set('info', true)}
+          >
+            포함
+          </button>
+          <button
+            aria-pressed={!state.info}
+            onClick={() => set('info', false)}
+          >
+            생략
+          </button>
+        </div>
       </div>
 
       {/* 섹션 조합 (레고) */}
@@ -115,16 +151,22 @@ export default function TravelFields({ state, set }: { state: State; set: Setter
                 {s.key === 'schedule' && active && (
                   <span className="mini-seg">
                     <button
-                      aria-pressed={state.scheduleStyle === 'table'}
-                      onClick={() => set('scheduleStyle', 'table')}
+                      aria-pressed={state.scheduleStyle === 'grid'}
+                      onClick={() => set('scheduleStyle', 'grid')}
                     >
-                      표
+                      2단
                     </button>
                     <button
                       aria-pressed={state.scheduleStyle === 'timeline'}
                       onClick={() => set('scheduleStyle', 'timeline')}
                     >
                       타임라인
+                    </button>
+                    <button
+                      aria-pressed={state.scheduleStyle === 'table'}
+                      onClick={() => set('scheduleStyle', 'table')}
+                    >
+                      표
                     </button>
                   </span>
                 )}

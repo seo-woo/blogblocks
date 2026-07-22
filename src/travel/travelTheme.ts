@@ -1,4 +1,4 @@
-import { TRAVEL_SECTIONS, type State, type TravelSectionKey } from '../types'
+import { TRAVEL_SECTIONS, travelAccentColor, type State, type TravelSectionKey } from '../types'
 import { companionNote } from '../lib/prompt'
 
 /**
@@ -14,10 +14,9 @@ import { companionNote } from '../lib/prompt'
 
 type Mode = 'template' | 'preview' | 'filled'
 
-// ---- 디자인 토큰 ----
+// ---- 디자인 토큰 (액센트는 state.travelAccent 로 선택) ----
 const FONT =
   "-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',Roboto,'Helvetica Neue',sans-serif"
-const ACCENT = '#d9633a'
 const INK = '#1f2126'
 const SUB = '#52555e'
 const MUTED = '#8b8e97'
@@ -25,7 +24,6 @@ const LINE = '#e6e2d9'
 const LINE_STRONG = '#d6d1c6'
 
 const H2 = `font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px;color:${INK};`
-const EYEBROW = `color:${ACCENT};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:800;`
 const TH = `text-align:left;padding:10px 14px 10px 0;font-size:12px;color:${MUTED};font-weight:700;letter-spacing:.02em;text-transform:uppercase;border-bottom:2px solid ${LINE_STRONG};`
 const TD = `padding:11px 14px 11px 0;border-bottom:1px solid ${LINE};color:${SUB};vertical-align:top;`
 const DIVIDER = `<div style="border-top:1px solid ${LINE};margin:30px 0;"></div>`
@@ -43,7 +41,7 @@ function starStr(score: number): string {
 const TOC_TITLES: Partial<Record<TravelSectionKey, string>> = {
   schedule: '일정 한눈에 보기',
   spots: '다녀온 곳',
-  restaurants: '맛집',
+  restaurants: '음식점',
   cafes: '카페',
   cost: '예상 비용',
   tips: '가기 전 꿀팁',
@@ -52,6 +50,8 @@ const TOC_TITLES: Partial<Record<TravelSectionKey, string>> = {
 }
 
 export function renderTravel(state: State, mode: Mode): string {
+  const ACCENT = travelAccentColor(state.travelAccent)
+  const EYEBROW = `color:${ACCENT};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:800;`
   const C = state.travelContent
   const two = (i: number) => String(i).padStart(2, '0')
   const clamp = (n: number) => Math.max(1, Math.min(6, Math.round(n || 1)))
@@ -71,11 +71,34 @@ export function renderTravel(state: State, mode: Mode): string {
   const companion = esc(state.companion)
 
   const photo = (desc: string) =>
-    `<div style="margin:16px 0 0;border:1px dashed ${LINE_STRONG};border-radius:8px;padding:30px 16px;text-align:center;color:${MUTED};font-size:13px;">📷 [사진: ${desc}]</div>`
-  const imgTag = (src: string, alt: string) =>
-    `<img src="${src}" alt="${esc(alt)}" style="width:100%;border-radius:8px;display:block;margin:16px 0 0;">`
-  const imgOrPhoto = (src: string | undefined, desc: string) =>
-    (mode === 'filled' && src) ? imgTag(src, desc) : photo(desc)
+    `<div style="margin:16px 0 0;border:1px dashed ${LINE_STRONG};border-radius:8px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;color:${MUTED};font-size:13px;">📷 [사진: ${desc}]</div>`
+  const coverImg = (img: { src: string; x: number; y: number }, alt: string) =>
+    `<div style="aspect-ratio:4/3;overflow:hidden;border-radius:8px;background:${LINE};">` +
+      `<img src="${img.src}" alt="${esc(alt)}" style="width:100%;height:100%;object-fit:cover;object-position:${img.x}% ${img.y}%;display:block;">` +
+    `</div>`
+  /** 1장 = 단일 4:3, 2장 이상 = 밀어서 넘기는 4:3 슬라이드 */
+  const gallery = (
+    srcs: Array<{ src: string; x: number; y: number }> | undefined,
+    alt: string,
+    ph: string,
+  ) => {
+    const list = (srcs || []).filter((im) => im && im.src)
+    if (mode !== 'filled' || !list.length) return photo(ph)
+    if (list.length === 1) {
+      return `<div style="margin:16px 0 0;">${coverImg(list[0], alt)}</div>`
+    }
+    const slides = list.map((im, i) =>
+      `<div style="scroll-snap-align:start;">${coverImg(im, `${alt} ${i + 1}`)}</div>`,
+    ).join('')
+    return (
+      `<div style="margin:16px 0 0;">` +
+        `<div style="display:grid;grid-auto-flow:column;grid-auto-columns:100%;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:thin;border-radius:8px;">` +
+          slides +
+        `</div>` +
+        `<div style="text-align:center;margin-top:8px;color:${MUTED};font-size:12px;">← 밀어서 넘기기 · ${list.length}장 →</div>` +
+      `</div>`
+    )
+  }
 
   const on = (k: TravelSectionKey) => state.travelSections[k]
   const sections: string[] = []
@@ -88,7 +111,10 @@ export function renderTravel(state: State, mode: Mode): string {
     else title = state.theme.trim() ? esc(state.theme) : `${place}, ${companion}과 떠난 여행`
     const subtitle = pick(C.heroSubtitle, '한 줄 소개 — 이 글에서 무엇을 얻어가는지',
       `${companion}과 함께한 ${place}, 동선부터 비용까지 한 번에 정리했어요.`)
-    const heroImg = (mode === 'filled' && C.heroImage) ? imgTag(C.heroImage, `${place} 대표 이미지`) : ''
+    const heroImg =
+      mode === 'filled' && C.heroImages.length
+        ? gallery(C.heroImages, `${place} 대표 이미지`, '대표 사진')
+        : ''
     sections.push(
       `<header style="text-align:center;padding:6px 0 4px;">` +
         `<div style="${EYEBROW}">TRAVEL · ${region}</div>` +
@@ -106,10 +132,10 @@ export function renderTravel(state: State, mode: Mode): string {
       `<div style="font-size:15px;font-weight:600;color:${INK};">${value}</div></div>`
     sections.push(
       `<section>` +
-        `<div style="${EYEBROW} text-align:center;margin-bottom:16px;">AT A GLANCE</div>` +
-        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">` +
+        `<div style="${EYEBROW} text-align:center;margin-bottom:16px;">한눈에 보기</div>` +
+        `<div class="ps-facts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">` +
           fact('여행지', place) +
-          fact('동행', `${companion} · ${companionNote[state.companion]}`) +
+          fact('동행', companion) +
           fact('기간', val(state.period, '기간·시기')) +
           fact('테마', val(state.theme, '한 줄 테마')) +
         `</div>` +
@@ -140,7 +166,7 @@ export function renderTravel(state: State, mode: Mode): string {
   const SAMPLE_STOPS = [
     ['☕', '09:30', '모닝 카페', '여유롭게 하루 시작'],
     ['⛪', '11:00', '대표 명소', '이 도시의 상징'],
-    ['🍜', '13:00', '점심 맛집', '현지 별미 한 그릇'],
+    ['🍜', '13:00', '점심 식당', '현지 별미 한 그릇'],
     ['📸', '16:00', '전망대', '사진 스팟'],
     ['🌆', '19:00', '야경 명소', '하루 마무리'],
   ]
@@ -159,14 +185,14 @@ export function renderTravel(state: State, mode: Mode): string {
 
     if (state.scheduleStyle === 'grid') {
       const cell = ([emoji, time, pl, memo]: string[]) =>
-        `<div style="flex:1 1 46%;min-width:190px;box-sizing:border-box;display:flex;gap:11px;align-items:flex-start;padding:14px 0 6px;border-top:1px solid ${LINE};">` +
+        `<div style="flex:1 1 46%;min-width:min(190px,100%);box-sizing:border-box;display:flex;gap:11px;align-items:flex-start;padding:14px 0 6px;border-top:1px solid ${LINE};">` +
           `<span style="flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid ${ACCENT};display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;">${emoji}</span>` +
           `<div><div style="font-size:12.5px;color:${ACCENT};font-weight:700;">${time}</div>` +
           `<div style="font-weight:700;color:${INK};font-size:15.5px;">${pl}</div>` +
           (memo ? `<div style="color:${SUB};font-size:13.5px;margin-top:1px;">${memo}</div>` : '') +
           `</div>` +
         `</div>`
-      inner = badge + `<div style="display:flex;flex-wrap:wrap;gap:0 24px;">${stopRows.map(cell).join('')}</div>`
+      inner = badge + `<div class="ps-sched-grid" style="display:flex;flex-wrap:wrap;gap:0 24px;">${stopRows.map(cell).join('')}</div>`
     } else if (state.scheduleStyle === 'timeline') {
       const stop = ([emoji, time, pl, memo]: string[]) =>
         `<div style="position:relative;padding:0 0 22px 30px;">` +
@@ -181,15 +207,16 @@ export function renderTravel(state: State, mode: Mode): string {
         `<tr><td style="${TD}padding-left:0;font-weight:700;color:${INK};white-space:nowrap;">${time}</td>` +
         `<td style="${TD}">${pl}</td><td style="${TD}padding-right:0;">${memo}</td></tr>`
       inner =
-        `<table style="width:100%;border-collapse:collapse;font-size:15px;">` +
+        `<div class="ps-table-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">` +
+        `<table style="width:100%;border-collapse:collapse;font-size:15px;min-width:320px;">` +
           `<thead><tr><th style="${TH}padding-left:0;">시간</th><th style="${TH}">장소</th><th style="${TH}padding-right:0;">메모</th></tr></thead>` +
           `<tbody>${stopRows.map(trow).join('')}</tbody>` +
-        `</table>`
+        `</table></div>`
     }
     sections.push(`<section><h2 style="${H2}">🗓️ 일정 한눈에 보기</h2>${inner}</section>`)
   }
 
-  // ---- POI (다녀온 장소/맛집/카페) — 번호 + 별점 + 본문 + 이미지 ----
+  // ---- POI (다녀온 장소/음식점/카페) — 번호 + 별점 + 본문 + 이미지 ----
   const ratingSamples: [string, string][] = [
     ['★★★★★', '5.0'], ['★★★★☆', '4.3'], ['★★★☆☆', '3.6'],
     ['★★★★☆', '4.0'], ['★★★★★', '4.8'], ['★★★☆☆', '3.4'],
@@ -233,7 +260,7 @@ export function renderTravel(state: State, mode: Mode): string {
           featureRow +
           `<p style="margin:0;color:${SUB};">${pick(it?.review, '솔직 후기·분위기·팁 (2~3문장)', '분위기가 좋고 사진 찍기 좋았어요. 오전 일찍 가면 한적합니다.')}</p>` +
           meta +
-          imgOrPhoto(it?.image, `${noun} ${i} 사진`) +
+          gallery(it?.images, `${noun} ${i} 사진`, `${noun} ${i} 사진`) +
         `</article>`,
       )
     }
@@ -241,7 +268,7 @@ export function renderTravel(state: State, mode: Mode): string {
   }
 
   if (on('spots')) sections.push(poiSection('spots', state.spotCount, '📍 다녀온 곳', '장소', '', '입장료', '소요시간'))
-  if (on('restaurants')) sections.push(poiSection('restaurants', state.restCount, '🍜 다녀온 맛집', '맛집', '대표메뉴', '가격대', '영업시간'))
+  if (on('restaurants')) sections.push(poiSection('restaurants', state.restCount, '🍜 다녀온 음식점', '음식점', '대표메뉴', '가격대', '영업시간'))
   if (on('cafes')) sections.push(poiSection('cafes', state.cafeCount, '☕ 다녀온 카페', '카페', '시그니처', '가격대', '영업시간'))
 
   // ---- 비용 ----
@@ -259,14 +286,15 @@ export function renderTravel(state: State, mode: Mode): string {
     sections.push(
       `<section>` +
         `<h2 style="${H2}">💰 예상 비용</h2>` +
-        `<table style="width:100%;border-collapse:collapse;font-size:15px;">` +
+        `<div class="ps-table-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">` +
+        `<table style="width:100%;border-collapse:collapse;font-size:15px;min-width:300px;">` +
           `<thead><tr><th style="${TH}padding-left:0;">항목</th><th style="${TH}text-align:right;">금액</th><th style="${TH}padding-right:0;">메모</th></tr></thead>` +
           `<tbody>${costRows.map(crow).join('')}` +
             `<tr><td style="${TD}padding-left:0;border-bottom:none;border-top:2px solid ${LINE_STRONG};font-weight:800;color:${INK};">합계</td>` +
             `<td style="${TD}text-align:right;border-bottom:none;border-top:2px solid ${LINE_STRONG};font-weight:800;color:${ACCENT};">${pick(C.costTotal, '총액', '000만원')}</td>` +
             `<td style="${TD}padding-right:0;border-bottom:none;border-top:2px solid ${LINE_STRONG};">${pick(C.costTotalMemo, '1인 기준 등', '1인 기준')}</td></tr>` +
           `</tbody>` +
-        `</table>` +
+        `</table></div>` +
       `</section>`,
     )
   }
@@ -331,8 +359,20 @@ export function renderTravel(state: State, mode: Mode): string {
     )
   }
 
+  const mobileCss =
+    `<style>` +
+    `.ps-post{overflow-wrap:anywhere;word-break:keep-all;}` +
+    `.ps-post img{max-width:100%;height:auto;}` +
+    `@media (max-width:520px){` +
+    `.ps-post{font-size:15px!important;padding-left:0!important;padding-right:0!important;}` +
+    `.ps-post h1{font-size:24px!important;}` +
+    `.ps-sched-grid>div{flex:1 1 100%!important;min-width:0!important;}` +
+    `}` +
+    `</style>`
+
   return (
     `<div class="ps-post" style="max-width:700px;margin:0 auto;padding:8px 0 40px;font-family:${FONT};color:${INK};font-size:16px;line-height:1.75;-webkit-text-size-adjust:100%;">` +
+    mobileCss +
     sections.join(DIVIDER) +
     `</div>`
   )
@@ -341,13 +381,13 @@ export function renderTravel(state: State, mode: Mode): string {
 /** 직접 작성한 내용이 하나라도 있는지 (미리보기·복사 모드 결정용) */
 export function hasTravelContent(s: State): boolean {
   const c = s.travelContent
-  if (c.heroTitle || c.heroSubtitle || c.heroImage) return true
+  if (c.heroTitle || c.heroSubtitle || c.heroImages.length) return true
   if (c.verdictOne || c.verdictBody || c.verdictTarget || c.verdictScore) return true
   if (c.ctaHeading || c.ctaSub || c.costTotal || c.costTotalMemo) return true
   if (c.stops.length || c.costRows.length || c.faq.length) return true
   if (c.tips.some((t) => t && t.trim())) return true
   if ([c.spots, c.restaurants, c.cafes].some((arr) =>
-    arr.some((p) => p && (p.name || p.review || p.image || p.rating || p.feature || p.loc || p.price || p.dur)))) return true
+    arr.some((p) => p && (p.name || p.review || p.images?.length || p.rating || p.feature || p.loc || p.price || p.dur)))) return true
   return false
 }
 
@@ -355,8 +395,11 @@ export function hasTravelContent(s: State): boolean {
 export function wrapPreviewDoc(inner: string): string {
   return (
     '<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '</head><body style="margin:0;background:#ffffff;padding:24px 18px;">' + inner + '</body></html>'
+    '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
+    '<style>html,body{margin:0;background:#fff;-webkit-text-size-adjust:100%;}' +
+    'body{padding:20px 14px;}' +
+    '@media (max-width:480px){body{padding:14px 10px;}}</style>' +
+    '</head><body>' + inner + '</body></html>'
   )
 }
 
@@ -372,7 +415,7 @@ export function buildTravelPrompt(state: State): string {
     '- HTML 태그 구조, class, style(인라인 스타일) 속성은 절대 변경하지 마세요. 디자인은 이미 완성돼 있습니다.\n' +
     '- 대괄호 [ ... ] 로 표시된 자리표시자의 내용만 실제 텍스트로 교체하세요.\n' +
     '- [사진: 설명] 마커는 태그를 그대로 두고 설명 문구만 상황에 맞게 다듬으세요. (실제 이미지는 나중에 사용자가 넣습니다)\n' +
-    '- 장소/맛집/카페는 "추천 몇 곳"이 아니라 실제로 다녀온 곳을 모두 소개하는 형태입니다. 방문한 곳 수만큼 항목을 늘리거나 줄이세요.\n' +
+    '- 장소/음식점/카페는 "추천 몇 곳"이 아니라 실제로 다녀온 곳을 모두 소개하는 형태입니다. 방문한 곳 수만큼 항목을 늘리거나 줄이세요.\n' +
     '- 각 항목의 번호(01, 02…)는 순서대로 유지하고, 항목을 추가·삭제하면 번호도 다시 매기세요.\n' +
     '- 각 항목의 별점(★)은 실제 평가에 맞춰 채운 별(★)과 빈 별(☆)의 개수를 조절하고(별은 항상 합계 5개), 옆의 [별점] 자리에 숫자(예: 4.5)를 넣으세요.\n' +
     (state.scheduleStyle !== 'table'

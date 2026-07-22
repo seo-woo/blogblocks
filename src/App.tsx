@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { emptyTravelContent, initialState, type Mode, type State } from './types'
+import { emptyTravelContent, initialState, migrateTravelContent, TRAVEL_ACCENTS, travelAccentColor, type Mode, type State, type TravelContent } from './types'
 import LabFields from './lab/LabFields'
 import LabOutput from './lab/LabOutput'
 import TravelPanel from './travel/TravelPanel'
 import TravelOutput from './travel/TravelOutput'
+import { countsFromContent } from './travel/travelContentAi'
 
 const STORE = 'prompt-studio-v1'
 
@@ -16,7 +17,10 @@ function loadState(): State {
         ...saved,
         // 중첩 객체는 기본값 위에 병합 (구버전 저장분에 없는 섹션 키 보정)
         travelSections: { ...initialState.travelSections, ...(saved.travelSections || {}) },
-        travelContent: { ...emptyTravelContent, ...(saved.travelContent || {}) },
+        travelContent: migrateTravelContent({ ...emptyTravelContent, ...(saved.travelContent || {}) }),
+        travelAccent: TRAVEL_ACCENTS.some((a) => a.id === saved.travelAccent)
+          ? saved.travelAccent
+          : initialState.travelAccent,
       }
     }
   } catch {
@@ -46,20 +50,38 @@ export default function App() {
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--accent',
-      state.mode === 'lab' ? 'var(--lab)' : 'var(--travel)',
+      state.mode === 'lab' ? 'var(--lab)' : travelAccentColor(state.travelAccent),
     )
-  }, [state.mode])
+  }, [state.mode, state.travelAccent])
 
   function set<K extends keyof State>(key: K, value: State[K]) {
     setState((s) => ({ ...s, [key]: value }))
   }
 
+  function applyTravelFill(content: TravelContent) {
+    setState((s) => ({
+      ...s,
+      travelContent: content,
+      ...countsFromContent(content, s),
+    }))
+  }
+
   function reset() {
     if (!window.confirm('입력한 내용을 모두 지울까요?')) return
     setState((s) => ({
-      ...s,
-      topic: '', tools: '', before: '', after: '', result: '', episode: '',
-      place: '', period: '', theme: '', tepisode: '', info: true,
+      ...initialState,
+      mode: s.mode, // 현재 모드는 유지
+      travelSections: { ...initialState.travelSections },
+      travelContent: {
+        ...emptyTravelContent,
+        stops: [],
+        spots: [],
+        restaurants: [],
+        cafes: [],
+        costRows: [],
+        tips: [],
+        faq: [],
+      },
     }))
   }
 
@@ -124,7 +146,7 @@ export default function App() {
         {/* RIGHT: output */}
         {state.mode === 'lab'
           ? <LabOutput state={state} hasAI={hasAI} />
-          : <TravelOutput state={state} hasAI={hasAI} />}
+          : <TravelOutput state={state} onAiFill={applyTravelFill} hasAI={hasAI} />}
       </div>
 
       <p className="foot">
