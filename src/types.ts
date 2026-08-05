@@ -1,4 +1,4 @@
-export type Mode = 'lab' | 'travel'
+export type Mode = 'lab' | 'travel' | 'food' | 'product'
 export type Region = '국내' | '해외'
 export type Companion = '혼자' | '짝꿍' | '가족' | '부모님'
 export type View = 'draft' | 'prompt'
@@ -23,6 +23,11 @@ export const TRAVEL_ACCENTS: ReadonlyArray<{
 export function travelAccentColor(id: TravelAccentId | string | undefined): string {
   return TRAVEL_ACCENTS.find((a) => a.id === id)?.color ?? TRAVEL_ACCENTS[0].color
 }
+
+/** 맛집 리뷰 포인트 컬러 (여행 프리셋 재사용) */
+export type FoodAccentId = TravelAccentId
+export const FOOD_ACCENTS = TRAVEL_ACCENTS
+export const foodAccentColor = travelAccentColor
 
 export type TravelSectionKey =
   | 'hero' | 'summary' | 'toc' | 'schedule' | 'spots'
@@ -80,6 +85,20 @@ export interface TravelContent {
 
 /** 장소/히어로당 최대 사진 수 (용량·붙여넣기 부담 완화) */
 export const MAX_IMAGES = 6
+
+/** 맛집 리뷰 섹션별 사진 한도 */
+export const FOOD_MAX = {
+  exterior: 1,
+  interior: 3,
+  dishes: 10,
+} as const
+
+/** 제품 리뷰 섹션별 사진 한도 */
+export const PRODUCT_MAX = {
+  unbox: 3,
+  design: 5,
+  usage: 10,
+} as const
 
 export function clampPos(n: number): number {
   if (typeof n !== 'number' || Number.isNaN(n)) return 50
@@ -152,6 +171,118 @@ export function migrateTravelContent(raw: Partial<TravelContent> & {
   }
 }
 
+// ---- 맛집 리뷰 ----
+export interface FoodContent {
+  title: string
+  subtitle: string
+  exteriorBody: string
+  exteriorImages: TravelImage[]
+  interiorBody: string
+  interiorImages: TravelImage[]
+  dishesBody: string
+  dishesImages: TravelImage[]
+  score: string
+  reviewOne: string
+  reviewBody: string
+}
+
+export const emptyFoodContent: FoodContent = {
+  title: '',
+  subtitle: '',
+  exteriorBody: '',
+  exteriorImages: [],
+  interiorBody: '',
+  interiorImages: [],
+  dishesBody: '',
+  dishesImages: [],
+  score: '',
+  reviewOne: '',
+  reviewBody: '',
+}
+
+export function migrateFoodContent(raw: Partial<FoodContent> | undefined | null): FoodContent {
+  if (!raw || typeof raw !== 'object') return { ...emptyFoodContent }
+  const asImages = (v: unknown, max: number): TravelImage[] => {
+    if (!Array.isArray(v)) return []
+    return v.map(toTravelImage).filter((x): x is TravelImage => !!x).slice(0, max)
+  }
+  return {
+    ...emptyFoodContent,
+    title: String(raw.title ?? ''),
+    subtitle: String(raw.subtitle ?? ''),
+    exteriorBody: String(raw.exteriorBody ?? ''),
+    exteriorImages: asImages(raw.exteriorImages, FOOD_MAX.exterior),
+    interiorBody: String(raw.interiorBody ?? ''),
+    interiorImages: asImages(raw.interiorImages, FOOD_MAX.interior),
+    dishesBody: String(raw.dishesBody ?? ''),
+    dishesImages: asImages(raw.dishesImages, FOOD_MAX.dishes),
+    score: String(raw.score ?? ''),
+    reviewOne: String(raw.reviewOne ?? ''),
+    reviewBody: String(raw.reviewBody ?? ''),
+  }
+}
+
+// ---- 제품 리뷰 ----
+export type ProductAccentId = TravelAccentId
+export const PRODUCT_ACCENTS = TRAVEL_ACCENTS
+export const productAccentColor = travelAccentColor
+
+export interface ProductContent {
+  title: string
+  subtitle: string
+  unboxBody: string
+  unboxImages: TravelImage[]
+  designBody: string
+  designImages: TravelImage[]
+  usageBody: string
+  usageImages: TravelImage[]
+  score: string
+  reviewOne: string
+  reviewBody: string
+  pros: string
+  cons: string
+}
+
+export const emptyProductContent: ProductContent = {
+  title: '',
+  subtitle: '',
+  unboxBody: '',
+  unboxImages: [],
+  designBody: '',
+  designImages: [],
+  usageBody: '',
+  usageImages: [],
+  score: '',
+  reviewOne: '',
+  reviewBody: '',
+  pros: '',
+  cons: '',
+}
+
+export function migrateProductContent(raw: Partial<ProductContent> | undefined | null): ProductContent {
+  if (!raw || typeof raw !== 'object') return { ...emptyProductContent }
+  const asImages = (v: unknown, max: number): TravelImage[] => {
+    if (!Array.isArray(v)) return []
+    return v.map(toTravelImage).filter((x): x is TravelImage => !!x).slice(0, max)
+  }
+  return {
+    ...emptyProductContent,
+    title: String(raw.title ?? ''),
+    subtitle: String(raw.subtitle ?? ''),
+    unboxBody: String(raw.unboxBody ?? ''),
+    unboxImages: asImages(raw.unboxImages, PRODUCT_MAX.unbox),
+    designBody: String(raw.designBody ?? ''),
+    designImages: asImages(raw.designImages, PRODUCT_MAX.design),
+    usageBody: String(raw.usageBody ?? ''),
+    usageImages: asImages(raw.usageImages, PRODUCT_MAX.usage),
+    score: String(raw.score ?? ''),
+    reviewOne: String(raw.reviewOne ?? ''),
+    reviewBody: String(raw.reviewBody ?? ''),
+    pros: String(raw.pros ?? ''),
+    cons: String(raw.cons ?? ''),
+  }
+}
+
 export interface State {
   mode: Mode
   region: Region
@@ -179,6 +310,22 @@ export interface State {
   travelAccent: TravelAccentId
   // 직접 작성한 내용 (비어 있으면 예시/자리표시자로 렌더)
   travelContent: TravelContent
+  // food review
+  foodName: string
+  foodArea: string
+  foodCuisine: string
+  foodVisit: string
+  foodPrice: string
+  foodAccent: FoodAccentId
+  foodContent: FoodContent
+  // product review
+  productName: string
+  productBrand: string
+  productCategory: string
+  productChannel: string
+  productPrice: string
+  productAccent: ProductAccentId
+  productContent: ProductContent
 }
 
 export const initialState: State = {
@@ -199,4 +346,18 @@ export const initialState: State = {
   scheduleStyle: 'grid',
   travelAccent: 'terracotta',
   travelContent: emptyTravelContent,
+  foodName: '',
+  foodArea: '',
+  foodCuisine: '',
+  foodVisit: '',
+  foodPrice: '',
+  foodAccent: 'wine',
+  foodContent: emptyFoodContent,
+  productName: '',
+  productBrand: '',
+  productCategory: '',
+  productChannel: '',
+  productPrice: '',
+  productAccent: 'charcoal',
+  productContent: emptyProductContent,
 }

@@ -9,6 +9,7 @@
   --line-strong: #d3cec3;
   --lab: #0f8f86;
   --travel: #d9633a;
+  --food: #8b3a4a;
   --accent: var(--lab);
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-line: color-mix(in srgb, var(--accent) 40%, var(--line));
@@ -98,6 +99,8 @@ header.top {
 
 /* Category toggle */
 .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+.modes.modes-3 { grid-template-columns: 1fr 1fr 1fr; }
+.modes.modes-4 { grid-template-columns: 1fr 1fr; }
 .mode-btn {
   appearance: none; cursor: pointer; text-align: left;
   background: var(--surface-2); color: var(--ink);
@@ -418,6 +421,8 @@ input:focus, textarea:focus, select:focus {
   .panel-head .actions .btn { width: 100%; text-align: center; }
   .panel-body { padding: 14px 12px; }
   .modes { gap: 6px; margin-bottom: 14px; }
+  .modes.modes-3,
+  .modes.modes-4 { grid-template-columns: 1fr 1fr; }
   .mode-btn { padding: 11px 10px; }
   .mode-btn .m-label { font-size: 13px; }
   .mode-btn .m-desc { font-size: 11px; }
@@ -454,6 +459,8 @@ input:focus, textarea:focus, select:focus {
 @media (max-width: 480px) {
   .wrap { padding-left: 12px; padding-right: 12px; }
   .modes { grid-template-columns: 1fr; }
+  .modes.modes-3,
+  .modes.modes-4 { grid-template-columns: 1fr; }
   .panel-head .actions { grid-template-columns: 1fr; }
   /* iOS 입력 포커스 시 자동 확대 방지 */
   input[type="text"], textarea, select {
