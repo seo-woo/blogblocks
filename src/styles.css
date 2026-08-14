@@ -389,6 +389,67 @@ input:focus, textarea:focus, select:focus {
 }
 .preview-note { margin: 10px 2px 0; font-size: 12px; color: var(--faint); line-height: 1.6; }
 
+.panel-head-actions { flex: none; }
+.panel-head-actions .btn { padding: 5px 11px; font-size: 12px; min-height: 0; }
+
+.draft-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(18, 18, 22, .46);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 12px;
+}
+.draft-dialog {
+  width: min(560px, 100%);
+  max-height: min(88vh, 720px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 12px 12px;
+  box-shadow: var(--shadow);
+  padding: 16px 16px 18px;
+}
+.draft-dialog-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.draft-dialog-head h2 {
+  margin: 0; font-size: 18px; letter-spacing: -.02em;
+}
+.draft-help {
+  margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.55;
+}
+.draft-toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px;
+}
+.draft-toolbar .btn { flex: 1 1 auto; }
+.draft-msg {
+  margin: 0 0 12px; font-size: 13px; color: var(--accent); line-height: 1.5;
+}
+.draft-list-title {
+  margin: 8px 0 8px; font-size: 12px; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); font-family: var(--mono); font-weight: 600;
+}
+.draft-empty { margin: 0; font-size: 13px; color: var(--faint); }
+.draft-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.draft-row {
+  display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); padding: 11px 12px;
+}
+.draft-row-title { font-weight: 650; font-size: 14px; }
+.draft-row-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.draft-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.draft-row-actions .btn { padding: 6px 10px; font-size: 12px; min-height: 36px; }
+
+@media (min-width: 640px) {
+  .draft-overlay { align-items: center; }
+  .draft-dialog { border-radius: var(--radius); padding: 18px 20px 20px; }
+  .draft-row {
+    flex-direction: row; align-items: center; justify-content: space-between;
+  }
+  .draft-row-actions { flex: none; }
+}
+
 /* ========== Mobile ========== */
 @media (max-width: 860px) {
   .wrap {

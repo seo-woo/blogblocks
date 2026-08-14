@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   emptyFoodContent,
   emptyProductContent,
   emptyTravelContent,
   foodAccentColor,
   initialState,
-  migrateFoodContent,
-  migrateProductContent,
-  migrateTravelContent,
   productAccentColor,
-  TRAVEL_ACCENTS,
   travelAccentColor,
   type Mode,
   type State,
@@ -23,36 +19,16 @@ import FoodPanel from './food/FoodPanel'
 import FoodOutput from './food/FoodOutput'
 import ProductPanel from './product/ProductPanel'
 import ProductOutput from './product/ProductOutput'
+import DraftsDialog from './components/DraftsDialog'
 import { countsFromContent } from './travel/travelContentAi'
+import { hydrateState } from './lib/state'
 
 const STORE = 'prompt-studio-v1'
-
-const VALID_MODES: Mode[] = ['lab', 'travel', 'food', 'product']
 
 function loadState(): State {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE) || 'null')
-    if (saved) {
-      const mode: Mode = VALID_MODES.includes(saved.mode) ? saved.mode : initialState.mode
-      return {
-        ...initialState,
-        ...saved,
-        mode,
-        travelSections: { ...initialState.travelSections, ...(saved.travelSections || {}) },
-        travelContent: migrateTravelContent({ ...emptyTravelContent, ...(saved.travelContent || {}) }),
-        travelAccent: TRAVEL_ACCENTS.some((a) => a.id === saved.travelAccent)
-          ? saved.travelAccent
-          : initialState.travelAccent,
-        foodAccent: TRAVEL_ACCENTS.some((a) => a.id === saved.foodAccent)
-          ? saved.foodAccent
-          : initialState.foodAccent,
-        foodContent: migrateFoodContent(saved.foodContent),
-        productAccent: TRAVEL_ACCENTS.some((a) => a.id === saved.productAccent)
-          ? saved.productAccent
-          : initialState.productAccent,
-        productContent: migrateProductContent(saved.productContent),
-      }
-    }
+    if (saved) return hydrateState(saved)
   } catch {
     /* ignore */
   }
@@ -81,6 +57,7 @@ function modeMeta(mode: Mode): { glyph: string; tag: string } {
 
 export default function App() {
   const [state, setState] = useState<State>(loadState)
+  const [draftsOpen, setDraftsOpen] = useState(false)
 
   const hasAI = useMemo(
     () => !!(window.claude && typeof window.claude.complete === 'function'),
@@ -107,6 +84,10 @@ export default function App() {
     }))
   }
 
+  const openDrafts = useCallback(() => { setDraftsOpen(true) }, [])
+  const closeDrafts = useCallback(() => { setDraftsOpen(false) }, [])
+  const restoreDraft = useCallback((next: State) => { setState(next) }, [])
+
   function reset() {
     if (!window.confirm('입력한 내용을 모두 지울까요?')) return
     setState((s) => ({
@@ -123,7 +104,7 @@ export default function App() {
         tips: [],
         faq: [],
       },
-      foodContent: { ...emptyFoodContent, exteriorImages: [], interiorImages: [], dishesImages: [] },
+      foodContent: { ...emptyFoodContent, exteriorImages: [], interiorImages: [], dishes: [] },
       productContent: {
         ...emptyProductContent,
         unboxImages: [],
@@ -152,9 +133,14 @@ export default function App() {
         <section className="panel">
           <div className="panel-head">
             <span className="eyebrow">01 · 조절판</span>
-            <button className="btn" onClick={reset} style={{ padding: '5px 11px', fontSize: 12 }}>
-              초기화
-            </button>
+            <div className="actions panel-head-actions">
+              <button type="button" className="btn" onClick={openDrafts}>
+                임시 저장
+              </button>
+              <button type="button" className="btn" onClick={reset}>
+                초기화
+              </button>
+            </div>
           </div>
           <div className="panel-body">
             <div className="modes modes-4">
@@ -204,8 +190,15 @@ export default function App() {
       <p className="foot">
         {state.mode === 'lab'
           ? '완성된 프롬프트를 복사해서 Claude에게 붙여넣으면 초안이 나옵니다.'
-          : 'HTML을 복사해 티스토리 글쓰기의 HTML 편집기에 붙여넣으면 그대로 발행됩니다.'}
+          : 'HTML을 복사해 티스토리 글쓰기의 HTML 편집기에 붙여넣으면 그대로 발행됩니다. 핸드폰에서 쓴 글은 ‘임시 저장 → 파일로 보내기’로 PC에 이어서 작업할 수 있습니다.'}
       </p>
+
+      <DraftsDialog
+        open={draftsOpen}
+        state={state}
+        onClose={closeDrafts}
+        onRestore={restoreDraft}
+      />
     </div>
   )
 }

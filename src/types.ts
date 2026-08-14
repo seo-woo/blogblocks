@@ -90,7 +90,8 @@ export const MAX_IMAGES = 6
 export const FOOD_MAX = {
   exterior: 1,
   interior: 3,
-  dishes: 10,
+  dishes: 10, // 메뉴(항목) 개수 상한
+  dishImages: 3, // 메뉴당 사진
 } as const
 
 /** 제품 리뷰 섹션별 사진 한도 */
@@ -172,6 +173,19 @@ export function migrateTravelContent(raw: Partial<TravelContent> & {
 }
 
 // ---- 맛집 리뷰 ----
+/** 음식 한 가지 = 사진 + 설명 (추가 버튼으로 반복) */
+export interface FoodDish {
+  name: string
+  body: string
+  images: TravelImage[]
+}
+
+export const emptyFoodDish: FoodDish = {
+  name: '',
+  body: '',
+  images: [],
+}
+
 export interface FoodContent {
   title: string
   subtitle: string
@@ -179,8 +193,11 @@ export interface FoodContent {
   exteriorImages: TravelImage[]
   interiorBody: string
   interiorImages: TravelImage[]
-  dishesBody: string
-  dishesImages: TravelImage[]
+  /** @deprecated 마이그레이션용 — dishes 로 이전 */
+  dishesBody?: string
+  /** @deprecated 마이그레이션용 — dishes 로 이전 */
+  dishesImages?: TravelImage[]
+  dishes: FoodDish[]
   score: string
   reviewOne: string
   reviewBody: string
@@ -193,8 +210,7 @@ export const emptyFoodContent: FoodContent = {
   exteriorImages: [],
   interiorBody: '',
   interiorImages: [],
-  dishesBody: '',
-  dishesImages: [],
+  dishes: [],
   score: '',
   reviewOne: '',
   reviewBody: '',
@@ -206,6 +222,34 @@ export function migrateFoodContent(raw: Partial<FoodContent> | undefined | null)
     if (!Array.isArray(v)) return []
     return v.map(toTravelImage).filter((x): x is TravelImage => !!x).slice(0, max)
   }
+
+  let dishes: FoodDish[] = []
+  if (Array.isArray(raw.dishes) && raw.dishes.length) {
+    dishes = raw.dishes.slice(0, FOOD_MAX.dishes).map((d) => {
+      const o = (d && typeof d === 'object') ? d as unknown as Record<string, unknown> : {}
+      return {
+        name: String(o.name ?? ''),
+        body: String(o.body ?? ''),
+        images: asImages(o.images, FOOD_MAX.dishImages),
+      }
+    })
+  } else {
+    // 구버전: 사진 여러 장 + 공통 본문 → 메뉴별로 쪼갬
+    const legacyImgs = asImages(raw.dishesImages, FOOD_MAX.dishes)
+    const legacyBody = String(raw.dishesBody ?? '')
+    if (legacyImgs.length || legacyBody.trim()) {
+      if (legacyImgs.length) {
+        dishes = legacyImgs.map((im, i) => ({
+          name: '',
+          body: i === 0 ? legacyBody : '',
+          images: [im],
+        }))
+      } else {
+        dishes = [{ name: '', body: legacyBody, images: [] }]
+      }
+    }
+  }
+
   return {
     ...emptyFoodContent,
     title: String(raw.title ?? ''),
@@ -214,8 +258,7 @@ export function migrateFoodContent(raw: Partial<FoodContent> | undefined | null)
     exteriorImages: asImages(raw.exteriorImages, FOOD_MAX.exterior),
     interiorBody: String(raw.interiorBody ?? ''),
     interiorImages: asImages(raw.interiorImages, FOOD_MAX.interior),
-    dishesBody: String(raw.dishesBody ?? ''),
-    dishesImages: asImages(raw.dishesImages, FOOD_MAX.dishes),
+    dishes,
     score: String(raw.score ?? ''),
     reviewOne: String(raw.reviewOne ?? ''),
     reviewBody: String(raw.reviewBody ?? ''),

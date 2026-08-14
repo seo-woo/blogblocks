@@ -58,9 +58,18 @@ export function renderProduct(state: State, mode: Mode): string {
     `<div style="aspect-ratio:4/3;overflow:hidden;border-radius:8px;background:${LINE};">` +
       `<img src="${img.src}" alt="${esc(alt)}" style="width:100%;height:100%;object-fit:cover;object-position:${img.x}% ${img.y}%;display:block;">` +
     `</div>`
+  const hasImgs = (srcs: TravelImage[] | undefined) =>
+    (srcs || []).some((im) => im && im.src)
+  const hasText = (s: string | undefined) => !!(s && s.trim())
+  /** filled: 사진/글 없으면 섹션 자체를 생략 */
+  const showBlock = (has: boolean) => mode !== 'filled' || has
+
   const gallery = (srcs: TravelImage[] | undefined, alt: string, ph: string) => {
     const list = (srcs || []).filter((im) => im && im.src)
-    if (mode !== 'filled' || !list.length) return photo(ph)
+    if (!list.length) {
+      // filled에서는 빈 사진 자리표시자를 넣지 않음
+      return mode === 'filled' ? '' : photo(ph)
+    }
     if (list.length === 1) {
       return `<div style="margin:16px 0 0;">${coverImg(list[0], alt)}</div>`
     }
@@ -77,8 +86,10 @@ export function renderProduct(state: State, mode: Mode): string {
     )
   }
 
-  const body = (text: string, ph: string, sample: string) =>
-    `<p style="margin:14px 0 0;color:${SUB};font-size:15.5px;line-height:1.8;white-space:pre-wrap;">${pick(text, ph, sample)}</p>`
+  const body = (text: string, ph: string, sample: string) => {
+    if (mode === 'filled' && !hasText(text)) return ''
+    return `<p style="margin:14px 0 0;color:${SUB};font-size:15.5px;line-height:1.8;white-space:pre-wrap;">${pick(text, ph, sample)}</p>`
+  }
 
   const sections: string[] = []
 
@@ -93,117 +104,153 @@ export function renderProduct(state: State, mode: Mode): string {
       ? esc(state.productName)
       : '솔직 사용 후기, 사기 전 체크포인트'
   }
-  const subtitle = pick(
-    C.subtitle,
-    '한 줄 소개',
-    `${esc(state.productBrand || '브랜드')} · ${esc(state.productCategory || '제품')} 솔직 리뷰`,
-  )
+  const subtitle = mode === 'filled' && !hasText(C.subtitle)
+    ? ''
+    : pick(
+      C.subtitle,
+      '한 줄 소개',
+      `${esc(state.productBrand || '브랜드')} · ${esc(state.productCategory || '제품')} 솔직 리뷰`,
+    )
 
   sections.push(
     `<header style="text-align:center;padding:6px 0 4px;">` +
       `<div style="${EYEBROW}">PRODUCT REVIEW</div>` +
       `<h1 style="font-size:30px;line-height:1.3;margin:12px 0 12px;letter-spacing:-.03em;font-weight:800;color:${INK};">${title}</h1>` +
-      `<p style="margin:0 auto;max-width:520px;color:${SUB};font-size:15px;">${subtitle}</p>` +
+      (subtitle ? `<p style="margin:0 auto;max-width:520px;color:${SUB};font-size:15px;">${subtitle}</p>` : '') +
     `</header>`,
   )
 
   const fact = (label: string, value: string) =>
     `<div><div style="font-size:12px;color:${MUTED};margin-bottom:3px;">${label}</div>` +
     `<div style="font-size:15px;font-weight:600;color:${INK};">${value}</div></div>`
-  sections.push(
-    `<section>` +
-      `<div style="${EYEBROW} text-align:center;margin-bottom:16px;">한눈에 보기</div>` +
-      `<div class="ps-facts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">` +
-        fact('제품', name) +
-        fact('브랜드', brand) +
-        fact('카테고리', category) +
-        fact('구매처', channel) +
-        fact('가격', price) +
-        fact('한 줄', mode === 'preview' ? '실사용 중심 후기' : val(C.subtitle, '한 줄 테마')) +
-      `</div>` +
-    `</section>`,
-  )
-
-  sections.push(
-    `<section>` +
-      `<h2 style="${H2}">📦 언박싱 · 구성</h2>` +
-      gallery(C.unboxImages, '언박싱', '언박싱·구성 사진 1~3장') +
-      body(
-        C.unboxBody,
-        '언박싱 후기 — 패키징·구성품·첫인상 (2~4문장)',
-        '박스 포장은 탄탄했고, 구성품이 깔끔하게 정리되어 있었어요. 설명서와 기본 구성이 빠짐없이 들어 있어 바로 쓰기에 부담이 없었습니다. 포장 자체에서 브랜드 톤이 잘 느껴졌습니다.',
-      ) +
-    `</section>`,
-  )
-
-  sections.push(
-    `<section>` +
-      `<h2 style="${H2}">✨ 디자인 · 디테일</h2>` +
-      gallery(C.designImages, '디자인', '디자인·디테일 사진 1~5장') +
-      body(
-        C.designBody,
-        '디자인 후기 — 외관·마감·휴대성·스펙 느낌 (2~4문장)',
-        '색감이 담백하고 마감이 꼼꼼한 편이에요. 손에 잡히는 질감이 좋고, 디테일이 과하지 않아서 오래 써도 질리지 않을 것 같았습니다. 크기도 일상에서 무리 없이 쓰기 좋은 사이즈예요.',
-      ) +
-    `</section>`,
-  )
-
-  sections.push(
-    `<section>` +
-      `<h2 style="${H2}">🖐️ 사용기</h2>` +
-      gallery(C.usageImages, '사용기', '사용 장면 사진 1~10장') +
-      body(
-        C.usageBody,
-        '사용 후기 — 실제 사용감·장점·아쉬운 점 (문단으로)',
-        '며칠 써 보니 일상 루틴에 잘 녹아들었어요. 조작이 직관적이고 결과물이 기대에 맞았습니다. 다만 초반 세팅은 설명서를 한 번쯤 보고 시작하면 편합니다. 전체적으로 만족도가 높은 제품이에요.',
-      ) +
-    `</section>`,
-  )
-
-  // Pros / cons cards when filled or always structure
-  const prosText = pick(C.pros, '장점 2~3줄', '직관적인 사용감 / 마감이 좋음 / 가격 대비 완성도')
-  const consText = pick(C.cons, '단점 1~2줄', '초반 세팅이 조금 필요함')
-  sections.push(
-    `<section>` +
-      `<h2 style="${H2}">⚖️ 장점 · 단점</h2>` +
-      `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">` +
-        `<div style="border-top:3px solid ${ACCENT};padding-top:12px;">` +
-          `<div style="font-size:13px;font-weight:800;color:${ACCENT};margin-bottom:8px;">장점</div>` +
-          `<p style="margin:0;color:${SUB};font-size:14.5px;line-height:1.75;white-space:pre-wrap;">${prosText}</p>` +
+  // 한눈에: 기본 정보가 하나라도 있거나 템플릿/미리보기일 때
+  const hasFacts =
+    hasText(state.productName) || hasText(state.productBrand) || hasText(state.productCategory) ||
+    hasText(state.productChannel) || hasText(state.productPrice) || hasText(C.subtitle)
+  if (showBlock(hasFacts)) {
+    sections.push(
+      `<section>` +
+        `<div style="${EYEBROW} text-align:center;margin-bottom:16px;">한눈에 보기</div>` +
+        `<div class="ps-facts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">` +
+          fact('제품', name) +
+          fact('브랜드', brand) +
+          fact('카테고리', category) +
+          fact('구매처', channel) +
+          fact('가격', price) +
+          fact('한 줄', mode === 'preview' ? '실사용 중심 후기' : val(C.subtitle, '한 줄 테마')) +
         `</div>` +
-        `<div style="border-top:3px solid ${LINE_STRONG};padding-top:12px;">` +
-          `<div style="font-size:13px;font-weight:800;color:${MUTED};margin-bottom:8px;">단점</div>` +
-          `<p style="margin:0;color:${SUB};font-size:14.5px;line-height:1.75;white-space:pre-wrap;">${consText}</p>` +
-        `</div>` +
-      `</div>` +
-    `</section>`,
-  )
-
-  let vStars = '★★★★☆'
-  let scoreLabel = '[총점]'
-  if (mode === 'preview') {
-    vStars = '★★★★☆'
-    scoreLabel = '4.5'
-  } else if (mode === 'filled') {
-    const n = parseFloat(C.score)
-    if (!isNaN(n) && n > 0) {
-      vStars = starStr(n)
-      scoreLabel = esc(C.score)
-    }
+      `</section>`,
+    )
   }
-  sections.push(
-    `<section>` +
-      `<h2 style="${H2}">✍️ 총점 & 총평</h2>` +
-      `<div style="font-size:22px;color:${ACCENT};font-weight:800;letter-spacing:2px;margin-bottom:6px;">${vStars}</div>` +
-      `<div style="font-size:14px;color:${MUTED};margin-bottom:10px;">총점 ${scoreLabel}</div>` +
-      `<div style="font-size:16px;font-weight:700;color:${INK};margin-bottom:10px;">${pick(C.reviewOne, '한 줄 총평', '사길 잘했다는 생각이 드는 제품')}</div>` +
-      `<p style="margin:0;color:${SUB};font-size:15.5px;line-height:1.8;">${pick(
-        C.reviewBody,
-        '총평 본문 2~4문장',
-        '디자인과 실사용 밸런스가 좋아요. 예민한 분께도 무난하고, 입문용·리플레이스용 모두 추천할 만합니다.',
-      )}</p>` +
-    `</section>`,
-  )
+
+  if (showBlock(hasText(C.unboxBody) || hasImgs(C.unboxImages))) {
+    sections.push(
+      `<section>` +
+        `<h2 style="${H2}">📦 언박싱 · 구성</h2>` +
+        gallery(C.unboxImages, '언박싱', '언박싱·구성 사진 1~3장') +
+        body(
+          C.unboxBody,
+          '언박싱 후기 — 패키징·구성품·첫인상 (2~4문장)',
+          '박스 포장은 탄탄했고, 구성품이 깔끔하게 정리되어 있었어요. 설명서와 기본 구성이 빠짐없이 들어 있어 바로 쓰기에 부담이 없었습니다. 포장 자체에서 브랜드 톤이 잘 느껴졌습니다.',
+        ) +
+      `</section>`,
+    )
+  }
+
+  if (showBlock(hasText(C.designBody) || hasImgs(C.designImages))) {
+    sections.push(
+      `<section>` +
+        `<h2 style="${H2}">✨ 디자인 · 디테일</h2>` +
+        gallery(C.designImages, '디자인', '디자인·디테일 사진 1~5장') +
+        body(
+          C.designBody,
+          '디자인 후기 — 외관·마감·휴대성·스펙 느낌 (2~4문장)',
+          '색감이 담백하고 마감이 꼼꼼한 편이에요. 손에 잡히는 질감이 좋고, 디테일이 과하지 않아서 오래 써도 질리지 않을 것 같았습니다. 크기도 일상에서 무리 없이 쓰기 좋은 사이즈예요.',
+        ) +
+      `</section>`,
+    )
+  }
+
+  if (showBlock(hasText(C.usageBody) || hasImgs(C.usageImages))) {
+    sections.push(
+      `<section>` +
+        `<h2 style="${H2}">🖐️ 사용기</h2>` +
+        gallery(C.usageImages, '사용기', '사용 장면 사진 1~10장') +
+        body(
+          C.usageBody,
+          '사용 후기 — 실제 사용감·장점·아쉬운 점 (문단으로)',
+          '며칠 써 보니 일상 루틴에 잘 녹아들었어요. 조작이 직관적이고 결과물이 기대에 맞았습니다. 다만 초반 세팅은 설명서를 한 번쯤 보고 시작하면 편합니다. 전체적으로 만족도가 높은 제품이에요.',
+        ) +
+      `</section>`,
+    )
+  }
+
+  const hasPros = hasText(C.pros)
+  const hasCons = hasText(C.cons)
+  if (showBlock(hasPros || hasCons)) {
+    const prosText = pick(C.pros, '장점 2~3줄', '직관적인 사용감 / 마감이 좋음 / 가격 대비 완성도')
+    const consText = pick(C.cons, '단점 1~2줄', '초반 세팅이 조금 필요함')
+    const showPros = mode !== 'filled' || hasPros
+    const showCons = mode !== 'filled' || hasCons
+    const cols = showPros && showCons ? '1fr 1fr' : '1fr'
+    sections.push(
+      `<section>` +
+        `<h2 style="${H2}">⚖️ 장점 · 단점</h2>` +
+        `<div style="display:grid;grid-template-columns:${cols};gap:14px;">` +
+          (showPros
+            ? `<div style="border-top:3px solid ${ACCENT};padding-top:12px;">` +
+                `<div style="font-size:13px;font-weight:800;color:${ACCENT};margin-bottom:8px;">장점</div>` +
+                `<p style="margin:0;color:${SUB};font-size:14.5px;line-height:1.75;white-space:pre-wrap;">${prosText}</p>` +
+              `</div>`
+            : '') +
+          (showCons
+            ? `<div style="border-top:3px solid ${LINE_STRONG};padding-top:12px;">` +
+                `<div style="font-size:13px;font-weight:800;color:${MUTED};margin-bottom:8px;">단점</div>` +
+                `<p style="margin:0;color:${SUB};font-size:14.5px;line-height:1.75;white-space:pre-wrap;">${consText}</p>` +
+              `</div>`
+            : '') +
+        `</div>` +
+      `</section>`,
+    )
+  }
+
+  const hasVerdict = hasText(C.score) || hasText(C.reviewOne) || hasText(C.reviewBody)
+  if (showBlock(hasVerdict)) {
+    let vStars = '★★★★☆'
+    let scoreLabel = '[총점]'
+    let showScore = true
+    if (mode === 'preview') {
+      vStars = '★★★★☆'
+      scoreLabel = '4.5'
+    } else if (mode === 'filled') {
+      const n = parseFloat(C.score)
+      if (!isNaN(n) && n > 0) {
+        vStars = starStr(n)
+        scoreLabel = esc(C.score)
+      } else {
+        showScore = false
+      }
+    }
+    sections.push(
+      `<section>` +
+        `<h2 style="${H2}">✍️ 총점 & 총평</h2>` +
+        (showScore
+          ? `<div style="font-size:22px;color:${ACCENT};font-weight:800;letter-spacing:2px;margin-bottom:6px;">${vStars}</div>` +
+            `<div style="font-size:14px;color:${MUTED};margin-bottom:10px;">총점 ${scoreLabel}</div>`
+          : '') +
+        (mode === 'filled' && !hasText(C.reviewOne)
+          ? ''
+          : `<div style="font-size:16px;font-weight:700;color:${INK};margin-bottom:10px;">${pick(C.reviewOne, '한 줄 총평', '사길 잘했다는 생각이 드는 제품')}</div>`) +
+        (mode === 'filled' && !hasText(C.reviewBody)
+          ? ''
+          : `<p style="margin:0;color:${SUB};font-size:15.5px;line-height:1.8;">${pick(
+            C.reviewBody,
+            '총평 본문 2~4문장',
+            '디자인과 실사용 밸런스가 좋아요. 예민한 분께도 무난하고, 입문용·리플레이스용 모두 추천할 만합니다.',
+          )}</p>`) +
+      `</section>`,
+    )
+  }
 
   const mobileCss =
     `<style>` +
