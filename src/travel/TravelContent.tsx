@@ -1,8 +1,12 @@
+import { useCallback, useMemo } from 'react'
 import {
   emptyPoi, emptyStop, MAX_IMAGES,
   type Poi, type State, type TravelContent as TC,
 } from '../types'
 import ImageGallery from '../components/ImageGallery'
+import AutoWriteBar from '../components/AutoWriteBar'
+import { buildTravelFillPrompt, countsFromContent, parseTravelContentResponse } from './travelContentAi'
+import { hasTravelContent } from './travelTheme'
 
 type Setter = <K extends keyof State>(key: K, value: State[K]) => void
 type PoiKey = 'spots' | 'restaurants' | 'cafes'
@@ -13,6 +17,20 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
   const C = state.travelContent
   const setC = (patch: Partial<TC>) => set('travelContent', { ...C, ...patch })
   const on = (k: keyof State['travelSections']) => state.travelSections[k]
+  const fillPrompt = useMemo(() => buildTravelFillPrompt(state), [state])
+  const blockedReason = state.place.trim() ? undefined : '구성 탭에서 여행지를 먼저 적어 주세요.'
+  const hasExisting = hasTravelContent(state)
+
+  const parseAndApply = useCallback((text: string) => {
+    const parsed = parseTravelContentResponse(text, C)
+    if (!parsed) return false
+    set('travelContent', parsed)
+    const counts = countsFromContent(parsed, state)
+    if (counts.spotCount) set('spotCount', counts.spotCount)
+    if (counts.restCount) set('restCount', counts.restCount)
+    if (counts.cafeCount) set('cafeCount', counts.cafeCount)
+    return true
+  }, [C, set, state])
 
   return (
     <div className="content-form">
@@ -20,6 +38,12 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
         칸을 채우고 사진을 올리면 오른쪽 <strong>미리보기</strong>에 바로 반영돼요.
         비운 칸은 <code>[ ]</code> 자리표시자로 남습니다. 완성되면 <strong>HTML 복사</strong>로 티스토리에 붙여넣으세요.
       </p>
+      <AutoWriteBar
+        blockedReason={blockedReason}
+        hasExisting={hasExisting}
+        prompt={fillPrompt}
+        parseAndApply={parseAndApply}
+      />
 
       {on('hero') && (
         <Group title="히어로">

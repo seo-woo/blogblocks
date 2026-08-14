@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react'
 import {
   FOOD_MAX,
   emptyFoodDish,
@@ -6,6 +7,9 @@ import {
   type State,
 } from '../types'
 import ImageGallery from '../components/ImageGallery'
+import AutoWriteBar from '../components/AutoWriteBar'
+import { buildFoodFillPrompt, parseFoodContentResponse } from './foodContentAi'
+import { hasFoodContent } from './foodTheme'
 
 type Setter = <K extends keyof State>(key: K, value: State[K]) => void
 
@@ -14,6 +18,16 @@ const RATING_OPTS = ['', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
 export default function FoodContentEditor({ state, set }: { state: State; set: Setter }) {
   const C = state.foodContent
   const setC = (patch: Partial<FC>) => set('foodContent', { ...C, ...patch })
+  const fillPrompt = useMemo(() => buildFoodFillPrompt(state), [state])
+  const blockedReason = state.foodName.trim() ? undefined : '구성 탭에서 가게 이름을 먼저 적어 주세요.'
+  const hasExisting = hasFoodContent(state)
+
+  const parseAndApply = useCallback((text: string) => {
+    const parsed = parseFoodContentResponse(text, C)
+    if (!parsed) return false
+    set('foodContent', parsed)
+    return true
+  }, [C, set])
 
   function updateDish(i: number, patch: Partial<FoodDish>) {
     const dishes = (C.dishes || []).map((d, xi) => (xi === i ? { ...d, ...patch } : d))
@@ -35,6 +49,12 @@ export default function FoodContentEditor({ state, set }: { state: State; set: S
         칸을 채우고 사진을 올리면 오른쪽 <strong>미리보기</strong>에 바로 반영돼요.
         완성되면 <strong>HTML 복사</strong>로 티스토리에 붙여넣으세요.
       </p>
+      <AutoWriteBar
+        blockedReason={blockedReason}
+        hasExisting={hasExisting}
+        prompt={fillPrompt}
+        parseAndApply={parseAndApply}
+      />
 
       <Group title="제목">
         <Field label="글 제목">

@@ -79,6 +79,15 @@ export default function FoodFields({ state, set }: { state: State; set: Setter }
         글 구성은 고정이에요 — <strong>외관 · 내부 · 음식 · 총점/총평</strong>.
         ‘내용 작성’ 탭에서 사진과 후기를 채우면 됩니다.
       </p>
+
+      <div className="field" style={{ marginTop: 14 }}>
+        <label>자동 작성용 메모 (선택)</label>
+        <textarea
+          value={state.foodMemo}
+          onChange={(e) => set('foodMemo', e.target.value)}
+          placeholder="실제로 느낀 점, 먹은 메뉴, 웨이팅, 주차 등을 짧게. 있으면 초안이 더 정확해져요."
+        />
+      </div>
     </div>
   )
 }

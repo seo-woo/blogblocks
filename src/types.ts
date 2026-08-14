@@ -361,6 +361,8 @@ export interface State {
   foodPrice: string
   foodAccent: FoodAccentId
   foodContent: FoodContent
+  /** 자동 작성에 참고할 실제 후기 포인트 */
+  foodMemo: string
   // product review
   productName: string
   productBrand: string
@@ -369,6 +371,7 @@ export interface State {
   productPrice: string
   productAccent: ProductAccentId
   productContent: ProductContent
+  productMemo: string
 }
 
 export const initialState: State = {
@@ -396,6 +399,7 @@ export const initialState: State = {
   foodPrice: '',
   foodAccent: 'wine',
   foodContent: emptyFoodContent,
+  foodMemo: '',
   productName: '',
   productBrand: '',
   productCategory: '',
@@ -403,4 +407,5 @@ export const initialState: State = {
   productPrice: '',
   productAccent: 'charcoal',
   productContent: emptyProductContent,
+  productMemo: '',
 }

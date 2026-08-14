@@ -3,20 +3,19 @@ import type { State, TravelContent } from '../types'
 import { buildTravelPrompt, hasTravelContent, renderTravel, wrapPreviewDoc } from './travelTheme'
 import { buildTravelFillPrompt, parseTravelContentResponse } from './travelContentAi'
 import { copyText } from '../lib/clipboard'
+import { AiError, completePrompt } from '../lib/ai'
 
 type OutView = 'preview' | 'prompt'
 
 export default function TravelOutput({
   state,
   onAiFill,
-  hasAI,
 }: {
   state: State
   onAiFill: (content: TravelContent) => void
-  hasAI: boolean
 }) {
   const [view, setView] = useState<OutView>('preview')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'parse-error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'parse-error' | 'need-key'>('idle')
   const [copiedHtml, setCopiedHtml] = useState(false)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
   const [justFilled, setJustFilled] = useState(false)
@@ -36,7 +35,6 @@ export default function TravelOutput({
   const htmlToCopy = hasContent ? filledHtml : templateHtml
 
   function generate() {
-    if (!hasAI) return
     if (!state.place.trim()) {
       window.alert("먼저 '여행지'를 입력해 주세요.")
       return
@@ -50,7 +48,7 @@ export default function TravelOutput({
     const id = ++reqId.current
     setStatus('loading')
     setJustFilled(false)
-    window.claude!.complete(fillPrompt).then(
+    completePrompt(fillPrompt).then(
       (text) => {
         if (id !== reqId.current) return
         const parsed = parseTravelContentResponse(text, state.travelContent)
@@ -63,8 +61,12 @@ export default function TravelOutput({
         setJustFilled(true)
         setTimeout(() => setJustFilled(false), 4000)
       },
-      () => {
+      (err) => {
         if (id !== reqId.current) return
+        if (err instanceof AiError && err.code === 'NO_KEY') {
+          setStatus('need-key')
+          return
+        }
         setStatus('error')
       },
     )
@@ -79,11 +81,9 @@ export default function TravelOutput({
         </div>
         {view === 'preview' ? (
           <div className="actions">
-            {hasAI && (
-              <button className="btn" onClick={generate} disabled={status === 'loading'}>
-                {status === 'loading' ? '생성 중…' : hasContent ? '다시 채우기' : 'AI로 채우기'}
-              </button>
-            )}
+            <button className="btn" onClick={generate} disabled={status === 'loading'}>
+              {status === 'loading' ? '생성 중…' : hasContent ? '다시 채우기' : '내용 자동 작성'}
+            </button>
             <button
               className={'btn primary' + (copiedHtml ? ' copied' : '')}
               onClick={() => copyText(htmlToCopy, () => {
@@ -112,6 +112,12 @@ export default function TravelOutput({
       <div className="panel-body">
         {view === 'preview' ? (
           <div>
+            {status === 'need-key' && (
+              <div className="err" style={{ marginBottom: 12 }}>
+                <strong>처음 한 번만 API 키가 필요해요.</strong><br />
+                왼쪽 <strong>내용 작성</strong>에서 ‘API 키’에 Gemini 무료 키를 저장한 뒤 다시 눌러 주세요.
+              </div>
+            )}
             {status === 'error' && (
               <div className="err" style={{ marginBottom: 12 }}>
                 <strong>AI 채우기에 실패했어요.</strong><br />
@@ -138,9 +144,7 @@ export default function TravelOutput({
             <p className="preview-note">
               {hasContent
                 ? '✅ ‘내용 작성’ 탭 내용으로 렌더된 미리보기예요. 칸을 고치면 바로 반영됩니다. ‘HTML 복사’ → 티스토리 HTML 편집기에 붙여넣으세요.'
-                : hasAI
-                  ? '지금은 디자인 미리보기(예시 문구)예요. ‘AI로 채우기’로 내용 칸을 채우거나, ‘내용 작성’ 탭에서 직접 입력하세요.'
-                  : '‘내용 작성’ 탭에서 칸을 채우면 여기 완성 HTML이 만들어져요. 또는 ‘HTML 복사’로 빈 템플릿을 받거나 ‘프롬프트’ 탭을 Claude에 붙여넣으세요.'}
+                : '지금은 디자인 미리보기예요. 왼쪽 ‘내용 작성’의 <strong>내용 자동 작성</strong>으로 칸을 채우거나 직접 입력하세요.'}
             </p>
           </div>
         ) : (

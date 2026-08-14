@@ -10,6 +10,7 @@ import {
   type TravelContent,
 } from '../types'
 import { companionNote } from '../lib/prompt'
+import { asStr, extractJsonObject } from '../lib/parseJson'
 
 /** 인앱 AI용: TravelContent JSON만 요청 (HTML은 스튜디오가 렌더) */
 export function buildTravelFillPrompt(state: State): string {
@@ -99,19 +100,13 @@ function asObj(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 }
 
-function str(v: unknown): string {
-  if (typeof v === 'string') return v
-  if (v == null) return ''
-  return String(v)
-}
-
 function normalizeStop(raw: unknown): Stop {
   const o = asObj(raw)
   return {
-    emoji: str(o.emoji).slice(0, 4),
-    time: str(o.time),
-    place: str(o.place),
-    memo: str(o.memo),
+    emoji: asStr(o.emoji).slice(0, 4),
+    time: asStr(o.time),
+    place: asStr(o.place),
+    memo: asStr(o.memo),
   }
 }
 
@@ -119,25 +114,25 @@ function normalizePoi(raw: unknown, prev?: Poi): Poi {
   const o = asObj(raw)
   return {
     ...emptyPoi,
-    name: str(o.name),
-    rating: str(o.rating),
-    feature: str(o.feature),
-    review: str(o.review),
-    loc: str(o.loc),
-    price: str(o.price),
-    dur: str(o.dur),
+    name: asStr(o.name),
+    rating: asStr(o.rating),
+    feature: asStr(o.feature),
+    review: asStr(o.review),
+    loc: asStr(o.loc),
+    price: asStr(o.price),
+    dur: asStr(o.dur),
     images: prev?.images?.length ? prev.images.map((im) => ({ ...im })) : [],
   }
 }
 
 function normalizeCost(raw: unknown): CostRow {
   const o = asObj(raw)
-  return { item: str(o.item), amount: str(o.amount), memo: str(o.memo) }
+  return { item: asStr(o.item), amount: asStr(o.amount), memo: asStr(o.memo) }
 }
 
 function normalizeFaq(raw: unknown): Faq {
   const o = asObj(raw)
-  return { q: str(o.q), a: str(o.a) }
+  return { q: asStr(o.q), a: asStr(o.a) }
 }
 
 function arr<T>(v: unknown, map: (x: unknown, i: number) => T): T[] {
@@ -150,41 +145,29 @@ export function parseTravelContentResponse(
   raw: string,
   prev: TravelContent,
 ): TravelContent | null {
-  let t = (raw || '').trim()
-  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) return null
-
-  let data: unknown
-  try {
-    data = JSON.parse(t.slice(start, end + 1))
-  } catch {
-    return null
-  }
-  const o = asObj(data)
-  if (!Object.keys(o).length) return null
+  const o = extractJsonObject(raw)
+  if (!o) return null
 
   const next: TravelContent = {
     ...emptyTravelContent,
-    heroTitle: str(o.heroTitle),
-    heroSubtitle: str(o.heroSubtitle),
+    heroTitle: asStr(o.heroTitle),
+    heroSubtitle: asStr(o.heroSubtitle),
     heroImages: prev.heroImages?.length ? prev.heroImages.map((im) => ({ ...im })) : [], // 사진·위치 유지
     stops: arr(o.stops, normalizeStop),
     spots: arr(o.spots, (x, i) => normalizePoi(x, prev.spots[i])),
     restaurants: arr(o.restaurants, (x, i) => normalizePoi(x, prev.restaurants[i])),
     cafes: arr(o.cafes, (x, i) => normalizePoi(x, prev.cafes[i])),
     costRows: arr(o.costRows, normalizeCost),
-    costTotal: str(o.costTotal),
-    costTotalMemo: str(o.costTotalMemo),
-    tips: arr(o.tips, (x) => str(x)),
+    costTotal: asStr(o.costTotal),
+    costTotalMemo: asStr(o.costTotalMemo),
+    tips: arr(o.tips, (x) => asStr(x)),
     faq: arr(o.faq, normalizeFaq),
-    verdictScore: str(o.verdictScore),
-    verdictOne: str(o.verdictOne),
-    verdictBody: str(o.verdictBody),
-    verdictTarget: str(o.verdictTarget),
-    ctaHeading: str(o.ctaHeading),
-    ctaSub: str(o.ctaSub),
+    verdictScore: asStr(o.verdictScore),
+    verdictOne: asStr(o.verdictOne),
+    verdictBody: asStr(o.verdictBody),
+    verdictTarget: asStr(o.verdictTarget),
+    ctaHeading: asStr(o.ctaHeading),
+    ctaSub: asStr(o.ctaSub),
   }
   return next
 }

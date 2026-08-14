@@ -181,7 +181,7 @@ export default function App() {
 
         {state.mode === 'lab' && <LabOutput state={state} hasAI={hasAI} />}
         {state.mode === 'travel' && (
-          <TravelOutput state={state} onAiFill={applyTravelFill} hasAI={hasAI} />
+          <TravelOutput state={state} onAiFill={applyTravelFill} />
         )}
         {state.mode === 'food' && <FoodOutput state={state} />}
         {state.mode === 'product' && <ProductOutput state={state} />}

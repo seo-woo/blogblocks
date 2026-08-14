@@ -1,7 +1,11 @@
+import { useCallback, useMemo } from 'react'
 import {
   PRODUCT_MAX, type ProductContent as PC, type State,
 } from '../types'
 import ImageGallery from '../components/ImageGallery'
+import AutoWriteBar from '../components/AutoWriteBar'
+import { buildProductFillPrompt, parseProductContentResponse } from './productContentAi'
+import { hasProductContent } from './productTheme'
 
 type Setter = <K extends keyof State>(key: K, value: State[K]) => void
 
@@ -10,6 +14,16 @@ const RATING_OPTS = ['', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
 export default function ProductContentEditor({ state, set }: { state: State; set: Setter }) {
   const C = state.productContent
   const setC = (patch: Partial<PC>) => set('productContent', { ...C, ...patch })
+  const fillPrompt = useMemo(() => buildProductFillPrompt(state), [state])
+  const blockedReason = state.productName.trim() ? undefined : '구성 탭에서 제품명을 먼저 적어 주세요.'
+  const hasExisting = hasProductContent(state)
+
+  const parseAndApply = useCallback((text: string) => {
+    const parsed = parseProductContentResponse(text, C)
+    if (!parsed) return false
+    set('productContent', parsed)
+    return true
+  }, [C, set])
 
   return (
     <div className="content-form">
@@ -17,6 +31,12 @@ export default function ProductContentEditor({ state, set }: { state: State; set
         칸을 채우고 사진을 올리면 오른쪽 <strong>미리보기</strong>에 바로 반영돼요.
         완성되면 <strong>HTML 복사</strong>로 티스토리에 붙여넣으세요.
       </p>
+      <AutoWriteBar
+        blockedReason={blockedReason}
+        hasExisting={hasExisting}
+        prompt={fillPrompt}
+        parseAndApply={parseAndApply}
+      />
 
       <Group title="제목">
         <Field label="글 제목">

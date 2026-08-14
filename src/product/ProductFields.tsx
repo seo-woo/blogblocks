@@ -79,6 +79,15 @@ export default function ProductFields({ state, set }: { state: State; set: Sette
         글 구성은 고정이에요 — <strong>언박싱 · 디자인 · 사용기 · 장단점 · 총점/총평</strong>.
         ‘내용 작성’ 탭에서 사진과 후기를 채우면 됩니다.
       </p>
+
+      <div className="field" style={{ marginTop: 14 }}>
+        <label>자동 작성용 메모 (선택)</label>
+        <textarea
+          value={state.productMemo}
+          onChange={(e) => set('productMemo', e.target.value)}
+          placeholder="실제 사용감, 장단점, 언박싱 여부 등을 짧게. 있으면 초안이 더 정확해져요."
+        />
+      </div>
     </div>
   )
 }
