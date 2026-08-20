@@ -40,9 +40,7 @@ function starStr(score: number): string {
 
 const TOC_TITLES: Partial<Record<TravelSectionKey, string>> = {
   schedule: '일정 한눈에 보기',
-  spots: '다녀온 곳',
-  restaurants: '음식점',
-  cafes: '카페',
+  course: '코스 후기',
   cost: '예상 비용',
   tips: '가기 전 꿀팁',
   faq: '자주 묻는 질문',
@@ -54,7 +52,6 @@ export function renderTravel(state: State, mode: Mode): string {
   const EYEBROW = `color:${ACCENT};letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:800;`
   const C = state.travelContent
   const two = (i: number) => String(i).padStart(2, '0')
-  const clamp = (n: number) => Math.max(1, Math.min(6, Math.round(n || 1)))
 
   // 아는 값(구성 탭의 여행 정보): 있으면 그대로, 없으면 자리표시자 (모든 모드 공통)
   const val = (x: string, ph: string) => (x && x.trim() ? esc(x.trim()) : `[${ph}]`)
@@ -157,11 +154,13 @@ export function renderTravel(state: State, mode: Mode): string {
     )
   }
 
-  // 일정 정거장 데이터 (표/세로/2단 공통)
+  // 일정 정거장 데이터 — visits(코스)에서 가져옴
   const PH_STOPS = [
-    ['[이모지]', '[시간]', '[장소]', '[메모]'],
-    ['[이모지]', '[시간]', '[장소]', '[메모]'],
-    ['[이모지]', '[시간]', '[장소]', '[메모]'],
+    ['☕', '[시간]', '[카페·아침]', '[메모]'],
+    ['📍', '[시간]', '[관광지]', '[메모]'],
+    ['🍜', '[시간]', '[맛집·점심]', '[메모]'],
+    ['☕', '[시간]', '[카페]', '[메모]'],
+    ['🌆', '[시간]', '[야경·마무리]', '[메모]'],
   ]
   const SAMPLE_STOPS = [
     ['☕', '09:30', '모닝 카페', '여유롭게 하루 시작'],
@@ -172,8 +171,13 @@ export function renderTravel(state: State, mode: Mode): string {
   ]
   const stopRows: string[][] =
     mode === 'filled'
-      ? (C.stops.length
-        ? C.stops.map((s) => [s.emoji ? esc(s.emoji) : '📍', fv(s.time, '시간'), fv(s.place, '장소'), s.memo ? esc(s.memo) : ''])
+      ? (C.visits.length
+        ? C.visits.map((v) => [
+          v.emoji ? esc(v.emoji) : '📍',
+          fv(v.time, '시간'),
+          fv(v.name, '장소'),
+          v.memo ? esc(v.memo) : '',
+        ])
         : PH_STOPS)
       : mode === 'template' ? PH_STOPS : SAMPLE_STOPS
 
@@ -216,7 +220,7 @@ export function renderTravel(state: State, mode: Mode): string {
     sections.push(`<section><h2 style="${H2}">🗓️ 일정 한눈에 보기</h2>${inner}</section>`)
   }
 
-  // ---- POI (다녀온 장소/음식점/카페) — 번호 + 별점 + 본문 + 이미지 ----
+  // ---- 코스 후기 (일정 순: 맛집·카페·관광지 섞음) ----
   const ratingSamples: [string, string][] = [
     ['★★★★★', '5.0'], ['★★★★☆', '4.3'], ['★★★☆☆', '3.6'],
     ['★★★★☆', '4.0'], ['★★★★★', '4.8'], ['★★★☆☆', '3.4'],
@@ -234,42 +238,78 @@ export function renderTravel(state: State, mode: Mode): string {
       `<span style="color:${MUTED};font-size:13px;margin-left:7px;">${sc}</span>` +
     `</div>`
   }
-  const poiSection = (
-    key: 'spots' | 'restaurants' | 'cafes',
-    count: number, heading: string, noun: string,
-    feature: string, chip2: string, chip3: string,
-  ) => {
-    const isSpot = noun === '장소'
-    const list = C[key]
-    const items: string[] = []
-    for (let i = 1; i <= clamp(count); i++) {
-      const it = list[i - 1]
-      const featureRow = feature
-        ? `<p style="margin:0 0 4px;color:${INK};font-weight:600;">${feature}: ${pick(it?.feature, `${feature} ${i}`, '현지에서 가장 유명한 메뉴')}</p>`
+  const kindLabel = (kind: string) =>
+    kind === 'restaurant' ? '맛집' : kind === 'cafe' ? '카페' : kind === 'other' ? '기타' : '관광지'
+  const featureLabel = (kind: string) =>
+    kind === 'restaurant' ? '대표메뉴' : kind === 'cafe' ? '시그니처' : '포인트'
+  const chip2 = (kind: string) => kind === 'spot' ? '입장료' : '가격대'
+  const chip3 = (kind: string) => kind === 'spot' ? '소요시간' : '영업시간'
+
+  if (on('course')) {
+    const SAMPLE_COURSE = [
+      { kind: 'cafe', emoji: '☕', time: '09:30', name: '골목 모닝 카페', feature: '시그니처 라떼', review: '조용하고 좌석이 편했어요. 여행 첫날 리듬을 잡기에 좋았습니다.', loc: '역에서 도보 5분', price: '음료 6천원대', dur: '08:00~18:00' },
+      { kind: 'spot', emoji: '⛪', time: '11:00', name: '올드타운 광장', feature: '', review: '사진 스팟이 많고 오전엔 한적합니다. 30~40분이면 여유롭게 둘러볼 수 있어요.', loc: '구시가지 중심', price: '무료', dur: '40분' },
+      { kind: 'restaurant', emoji: '🍜', time: '13:00', name: '동네 국수집', feature: '간장 라멘', review: '국물이 담백하고 양이 충분했어요. 웨이팅이 생길 수 있어 조금 일찍 가는 걸 추천합니다.', loc: '시장 골목', price: '1인 1만원대', dur: '11:00~21:00' },
+    ]
+    type CourseItem = {
+      kind: string; emoji?: string; time?: string; name?: string
+      feature?: string; review?: string; rating?: string
+      loc?: string; price?: string; dur?: string
+      images?: State['travelContent']['visits'][number]['images']
+    }
+    let list: CourseItem[] = []
+    if (mode === 'template') {
+      list = [1, 2, 3].map((i) => ({
+        kind: i === 1 ? 'cafe' : i === 2 ? 'spot' : 'restaurant',
+        time: '[시간]',
+        name: `[장소 이름 ${i}]`,
+        feature: i === 2 ? '' : '[메뉴·포인트]',
+        review: '[솔직 후기 2~3문장]',
+        loc: '[위치]',
+        price: '[가격]',
+        dur: '[소요·영업]',
+      }))
+    } else if (mode === 'preview') {
+      list = SAMPLE_COURSE
+    } else {
+      list = C.visits.length
+        ? C.visits
+        : [{ kind: 'spot', name: '', review: '', time: '', feature: '', loc: '', price: '', dur: '' }]
+    }
+
+    const items = list.map((it, idx) => {
+      const i = idx + 1
+      const kind = it.kind || 'spot'
+      const showFeature = kind === 'restaurant' || kind === 'cafe' || !!(it.feature && String(it.feature).trim())
+      const featureRow = showFeature
+        ? `<p style="margin:0 0 4px;color:${INK};font-weight:600;">${featureLabel(kind)}: ${pick(it.feature, `${featureLabel(kind)}`, '현지에서 가장 유명한 메뉴')}</p>`
+        : ''
+      const timeLine = (it.time && String(it.time).trim()) || mode !== 'filled'
+        ? `<div style="font-size:13px;color:${ACCENT};font-weight:700;margin:0 0 4px;">${pick(it.time, '시간', SAMPLE_COURSE[idx % SAMPLE_COURSE.length].time)}</div>`
         : ''
       const meta =
         `<div style="margin:14px 0 0;color:${MUTED};font-size:13.5px;">` +
-        `📍 ${pick(it?.loc, '위치', '중심가에서 도보 10분')} · ` +
-        `💵 ${pick(it?.price, chip2, isSpot ? '무료' : '1~2만원')} · ` +
-        `⏱ ${pick(it?.dur, chip3, isSpot ? '1시간' : '11:00~21:00')}</div>`
-      items.push(
+        `📍 ${pick(it.loc, '위치', '중심가에서 도보 10분')} · ` +
+        `💵 ${pick(it.price, chip2(kind), kind === 'spot' ? '무료' : '1~2만원')} · ` +
+        `⏱ ${pick(it.dur, chip3(kind), kind === 'spot' ? '1시간' : '11:00~21:00')}</div>`
+      return (
         `<article style="${i === 1 ? '' : `border-top:1px solid ${LINE};margin-top:26px;padding-top:26px;`}">` +
-          `<h3 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;color:${INK};">` +
-            `<span style="color:${ACCENT};">${two(i)}</span> ${pick(it?.name, `${noun} 이름 ${i}`, `${noun === '장소' ? '방문지' : noun} ${i}`)}</h3>` +
-          ratingHtml(i, it?.rating) +
+          timeLine +
+          `<h3 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;color:${INK};">` +
+            `<span style="color:${ACCENT};">${two(i)}</span> ${pick(it.name, '장소 이름', SAMPLE_COURSE[idx % SAMPLE_COURSE.length].name)}` +
+            `<span style="margin-left:8px;font-size:12px;font-weight:700;color:${MUTED};letter-spacing:.04em;">${kindLabel(kind)}</span>` +
+          `</h3>` +
+          ratingHtml(i, it.rating) +
           featureRow +
-          `<p style="margin:0;color:${SUB};">${pick(it?.review, '솔직 후기·분위기·팁 (2~3문장)', '분위기가 좋고 사진 찍기 좋았어요. 오전 일찍 가면 한적합니다.')}</p>` +
+          `<p style="margin:0;color:${SUB};">${pick(it.review, '솔직 후기·분위기·팁 (2~3문장)', SAMPLE_COURSE[idx % SAMPLE_COURSE.length].review)}</p>` +
           meta +
-          gallery(it?.images, `${noun} ${i} 사진`, `${noun} ${i} 사진`) +
-        `</article>`,
+          gallery(it.images, `${kindLabel(kind)} ${i} 사진`, `${kindLabel(kind)} ${i} 사진`) +
+        `</article>`
       )
-    }
-    return `<section><h2 style="${H2}">${heading}</h2>${items.join('')}</section>`
-  }
+    }).join('')
 
-  if (on('spots')) sections.push(poiSection('spots', state.spotCount, '📍 다녀온 곳', '장소', '', '입장료', '소요시간'))
-  if (on('restaurants')) sections.push(poiSection('restaurants', state.restCount, '🍜 다녀온 음식점', '음식점', '대표메뉴', '가격대', '영업시간'))
-  if (on('cafes')) sections.push(poiSection('cafes', state.cafeCount, '☕ 다녀온 카페', '카페', '시그니처', '가격대', '영업시간'))
+    sections.push(`<section><h2 style="${H2}">🚶 코스 후기 (일정 순)</h2>${items}</section>`)
+  }
 
   // ---- 비용 ----
   if (on('cost')) {
@@ -384,10 +424,9 @@ export function hasTravelContent(s: State): boolean {
   if (c.heroTitle || c.heroSubtitle || c.heroImages.length) return true
   if (c.verdictOne || c.verdictBody || c.verdictTarget || c.verdictScore) return true
   if (c.ctaHeading || c.ctaSub || c.costTotal || c.costTotalMemo) return true
-  if (c.stops.length || c.costRows.length || c.faq.length) return true
+  if (c.visits.some((v) => v && (v.name || v.review || v.memo || v.time || v.images?.length || v.rating || v.feature || v.loc || v.price || v.dur))) return true
+  if (c.costRows.length || c.faq.length) return true
   if (c.tips.some((t) => t && t.trim())) return true
-  if ([c.spots, c.restaurants, c.cafes].some((arr) =>
-    arr.some((p) => p && (p.name || p.review || p.images?.length || p.rating || p.feature || p.loc || p.price || p.dur)))) return true
   return false
 }
 
@@ -415,11 +454,11 @@ export function buildTravelPrompt(state: State): string {
     '- HTML 태그 구조, class, style(인라인 스타일) 속성은 절대 변경하지 마세요. 디자인은 이미 완성돼 있습니다.\n' +
     '- 대괄호 [ ... ] 로 표시된 자리표시자의 내용만 실제 텍스트로 교체하세요.\n' +
     '- [사진: 설명] 마커는 태그를 그대로 두고 설명 문구만 상황에 맞게 다듬으세요. (실제 이미지는 나중에 사용자가 넣습니다)\n' +
-    '- 장소/음식점/카페는 "추천 몇 곳"이 아니라 실제로 다녀온 곳을 모두 소개하는 형태입니다. 방문한 곳 수만큼 항목을 늘리거나 줄이세요.\n' +
-    '- 각 항목의 번호(01, 02…)는 순서대로 유지하고, 항목을 추가·삭제하면 번호도 다시 매기세요.\n' +
+    '- 코스 후기는 맛집·카페·관광지를 카테고리로 나누지 말고, 실제 방문 시간 순서대로 항목을 나열하세요.\n' +
+    '- 각 항목의 번호(01, 02…)는 일정 순서를 유지하고, 항목을 추가·삭제하면 번호도 다시 매기세요.\n' +
     '- 각 항목의 별점(★)은 실제 평가에 맞춰 채운 별(★)과 빈 별(☆)의 개수를 조절하고(별은 항상 합계 5개), 옆의 [별점] 자리에 숫자(예: 4.5)를 넣으세요.\n' +
     (state.scheduleStyle !== 'table'
-      ? '- 일정 정거장(이모지+시간+장소+메모)의 [이모지]에는 장소에 어울리는 이모지 1개를 넣고 시간순으로 정렬하세요. 정거장 수는 자유롭게 늘리거나 줄이되 같은 구조를 복제하고, 여러 날이면 "DAY 1" 뱃지 블록 전체를 복제해 DAY 2, DAY 3… 로 이어 붙이세요.\n'
+      ? '- 일정 한눈에 보기와 코스 후기의 장소·시간은 같은 순서를 유지하세요. 정거장 수는 자유롭게 늘리거나 줄이되 같은 구조를 복제하고, 여러 날이면 "DAY 1" 뱃지 블록 전체를 복제해 DAY 2, DAY 3… 로 이어 붙이세요.\n'
       : '- 일정표의 행 수는 자유롭게 늘리거나 줄이되 td 의 style 은 유지하세요.\n') +
     '- 표(비용 등)의 행 수는 실제 내용에 맞게 조절하되, td/th 의 style 은 다른 칸과 동일하게 유지하세요.\n' +
     '- 결과는 코드펜스(```)나 설명 없이, <div class="ps-post" ...> 부터 마지막 </div> 까지 "완성된 HTML 하나만" 출력하세요.\n\n' +

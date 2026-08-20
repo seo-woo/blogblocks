@@ -20,7 +20,6 @@ import FoodOutput from './food/FoodOutput'
 import ProductPanel from './product/ProductPanel'
 import ProductOutput from './product/ProductOutput'
 import DraftsDialog from './components/DraftsDialog'
-import { countsFromContent } from './travel/travelContentAi'
 import { hydrateState } from './lib/state'
 
 const STORE = 'prompt-studio-v1'
@@ -80,7 +79,6 @@ export default function App() {
     setState((s) => ({
       ...s,
       travelContent: content,
-      ...countsFromContent(content, s),
     }))
   }
 
@@ -96,10 +94,7 @@ export default function App() {
       travelSections: { ...initialState.travelSections },
       travelContent: {
         ...emptyTravelContent,
-        stops: [],
-        spots: [],
-        restaurants: [],
-        cafes: [],
+        visits: [],
         costRows: [],
         tips: [],
         faq: [],
@@ -147,7 +142,7 @@ export default function App() {
               <ModeButton active={state.mode === 'lab'} mode="lab"
                 label="🧪 AI 실험실" desc="실험 노트 · Before/After" onSelect={set} />
               <ModeButton active={state.mode === 'travel'} mode="travel"
-                label="✈️ 여행" desc="섹션 조합 · HTML" onSelect={set} />
+                label="✈️ 여행" desc="일정 순 코스 · HTML" onSelect={set} />
               <ModeButton active={state.mode === 'food'} mode="food"
                 label="🍜 맛집 리뷰" desc="외관·내부·음식·총점" onSelect={set} />
               <ModeButton active={state.mode === 'product'} mode="product"

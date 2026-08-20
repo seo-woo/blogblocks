@@ -1,17 +1,35 @@
 import { useCallback, useMemo } from 'react'
 import {
-  emptyPoi, emptyStop, MAX_IMAGES,
-  type Poi, type State, type TravelContent as TC,
+  emptyVisit, MAX_IMAGES, VISIT_KINDS,
+  type State, type TravelContent as TC, type Visit, type VisitKind,
 } from '../types'
 import ImageGallery from '../components/ImageGallery'
 import AutoWriteBar from '../components/AutoWriteBar'
-import { buildTravelFillPrompt, countsFromContent, parseTravelContentResponse } from './travelContentAi'
+import { buildTravelFillPrompt, parseTravelContentResponse } from './travelContentAi'
 import { hasTravelContent } from './travelTheme'
 
 type Setter = <K extends keyof State>(key: K, value: State[K]) => void
-type PoiKey = 'spots' | 'restaurants' | 'cafes'
 
 const RATING_OPTS = ['', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1']
+
+function kindMeta(kind: VisitKind) {
+  return VISIT_KINDS.find((k) => k.id === kind) || VISIT_KINDS[0]
+}
+
+function featureLabel(kind: VisitKind): string {
+  if (kind === 'restaurant') return '대표메뉴'
+  if (kind === 'cafe') return '시그니처'
+  if (kind === 'spot') return '한줄 포인트 (선택)'
+  return '한줄 메모 (선택)'
+}
+
+function priceLabel(kind: VisitKind): string {
+  return kind === 'spot' ? '입장료' : '가격대'
+}
+
+function durLabel(kind: VisitKind): string {
+  return kind === 'spot' ? '소요시간' : '영업시간'
+}
 
 export default function TravelContent({ state, set }: { state: State; set: Setter }) {
   const C = state.travelContent
@@ -25,18 +43,48 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
     const parsed = parseTravelContentResponse(text, C)
     if (!parsed) return false
     set('travelContent', parsed)
-    const counts = countsFromContent(parsed, state)
-    if (counts.spotCount) set('spotCount', counts.spotCount)
-    if (counts.restCount) set('restCount', counts.restCount)
-    if (counts.cafeCount) set('cafeCount', counts.cafeCount)
     return true
-  }, [C, set, state])
+  }, [C, set])
+
+  const updateVisit = useCallback((i: number, patch: Partial<Visit>) => {
+    setC({
+      visits: C.visits.map((x, xi) => {
+        if (xi !== i) return x
+        const next = { ...x, ...patch }
+        if (patch.kind && !patch.emoji) {
+          const meta = kindMeta(patch.kind)
+          if (!x.emoji || VISIT_KINDS.some((k) => k.emoji === x.emoji)) {
+            next.emoji = meta.emoji
+          }
+        }
+        return next
+      }),
+    })
+  }, [C.visits, setC])
+
+  const removeVisit = useCallback((i: number) => {
+    setC({ visits: C.visits.filter((_, xi) => xi !== i) })
+  }, [C.visits, setC])
+
+  const addVisit = useCallback(() => {
+    setC({ visits: [...C.visits, { ...emptyVisit, images: [] }] })
+  }, [C.visits, setC])
+
+  const moveVisit = useCallback((i: number, dir: -1 | 1) => {
+    const j = i + dir
+    if (j < 0 || j >= C.visits.length) return
+    const next = C.visits.slice()
+    const tmp = next[i]
+    next[i] = next[j]
+    next[j] = tmp
+    setC({ visits: next })
+  }, [C.visits, setC])
 
   return (
     <div className="content-form">
       <p className="content-hint">
         칸을 채우고 사진을 올리면 오른쪽 <strong>미리보기</strong>에 바로 반영돼요.
-        비운 칸은 <code>[ ]</code> 자리표시자로 남습니다. 완성되면 <strong>HTML 복사</strong>로 티스토리에 붙여넣으세요.
+        코스는 <strong>시간 순</strong>으로 쓰고, 맛집·카페·관광지를 섞어 넣으면 됩니다.
       </p>
       <AutoWriteBar
         blockedReason={blockedReason}
@@ -61,53 +109,105 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
         </Group>
       )}
 
-      {on('schedule') && (
-        <Group title="일정">
-          {C.stops.map((s, i) => (
-            <div className="repeat-item" key={i}>
+      {(on('schedule') || on('course')) && (
+        <Group title="코스 (일정 순서)">
+          <p className="content-hint sm">
+            위에서부터 시간 순으로 추가하세요. ‘일정 한눈에 보기’와 ‘코스 후기’가 이 목록을 같이 씁니다.
+            종류만 맛집·카페·관광지로 고르면 됩니다.
+          </p>
+          {C.visits.map((v, i) => (
+            <div className="repeat-item" key={`visit-${i}-${v.name || 'empty'}`}>
               <div className="repeat-head">
-                <span>정거장 {i + 1}</span>
-                <button className="rm" onClick={() => setC({ stops: C.stops.filter((_, x) => x !== i) })}>삭제</button>
+                <span>{String(i + 1).padStart(2, '0')} · {kindMeta(v.kind).label}</span>
+                <div className="draft-row-actions">
+                  <button type="button" className="btn" onClick={() => moveVisit(i, -1)} disabled={i === 0}>↑</button>
+                  <button type="button" className="btn" onClick={() => moveVisit(i, 1)} disabled={i === C.visits.length - 1}>↓</button>
+                  <button type="button" className="rm" onClick={() => removeVisit(i)}>삭제</button>
+                </div>
               </div>
+
+              <div className="chips" style={{ marginBottom: 10 }}>
+                {VISIT_KINDS.map((k) => (
+                  <button
+                    key={k.id}
+                    type="button"
+                    className="chip"
+                    aria-pressed={v.kind === k.id}
+                    onClick={() => updateVisit(i, { kind: k.id })}
+                  >
+                    {k.emoji} {k.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="grid3">
-                <input type="text" value={s.emoji} placeholder="이모지" maxLength={2}
-                  onChange={(e) => updateStop(C, setC, i, { emoji: e.target.value })} />
-                <input type="text" value={s.time} placeholder="시간 (09:30)"
-                  onChange={(e) => updateStop(C, setC, i, { time: e.target.value })} />
-                <input type="text" value={s.place} placeholder="장소"
-                  onChange={(e) => updateStop(C, setC, i, { place: e.target.value })} />
+                <input type="text" value={v.emoji} placeholder="이모지" maxLength={4}
+                  onChange={(e) => updateVisit(i, { emoji: e.target.value })} />
+                <input type="text" value={v.time} placeholder="시간 (09:30)"
+                  onChange={(e) => updateVisit(i, { time: e.target.value })} />
+                <input type="text" value={v.name} placeholder="장소·가게 이름"
+                  onChange={(e) => updateVisit(i, { name: e.target.value })} />
               </div>
-              <input type="text" value={s.memo} placeholder="메모 (선택)"
-                onChange={(e) => updateStop(C, setC, i, { memo: e.target.value })} />
+              <input type="text" value={v.memo} placeholder="일정 한줄 메모 (예: 여유롭게 하루 시작)"
+                onChange={(e) => updateVisit(i, { memo: e.target.value })}
+                style={{ marginTop: 8 }} />
+
+              {on('course') && (
+                <>
+                  <div className="grid2" style={{ marginTop: 10 }}>
+                    <select value={v.rating} onChange={(e) => updateVisit(i, { rating: e.target.value })}>
+                      {RATING_OPTS.map((r) => (
+                        <option key={r || 'empty'} value={r}>{r === '' ? '별점' : `★ ${r}`}</option>
+                      ))}
+                    </select>
+                    <input type="text" value={v.feature} placeholder={featureLabel(v.kind)}
+                      onChange={(e) => updateVisit(i, { feature: e.target.value })} />
+                  </div>
+                  <textarea value={v.review} placeholder="솔직 후기·분위기·팁 (2~4문장)"
+                    onChange={(e) => updateVisit(i, { review: e.target.value })}
+                    style={{ marginTop: 8 }} />
+                  <div className="grid3" style={{ marginTop: 8 }}>
+                    <input type="text" value={v.loc} placeholder="위치"
+                      onChange={(e) => updateVisit(i, { loc: e.target.value })} />
+                    <input type="text" value={v.price} placeholder={priceLabel(v.kind)}
+                      onChange={(e) => updateVisit(i, { price: e.target.value })} />
+                    <input type="text" value={v.dur} placeholder={durLabel(v.kind)}
+                      onChange={(e) => updateVisit(i, { dur: e.target.value })} />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <ImageGallery
+                      value={v.images}
+                      onChange={(imgs) => updateVisit(i, { images: imgs })}
+                      max={MAX_IMAGES}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           ))}
-          <button className="add" onClick={() => setC({ stops: [...C.stops, { ...emptyStop }] })}>＋ 정거장 추가</button>
+          <button type="button" className="add" onClick={addVisit}>＋ 코스에 장소 추가</button>
         </Group>
       )}
-
-      {on('spots') && <PoiGroup title="다녀온 곳" pkey="spots" count={state.spotCount} C={C} setC={setC} />}
-      {on('restaurants') && <PoiGroup title="다녀온 음식점" pkey="restaurants" count={state.restCount} C={C} setC={setC} feature="대표메뉴" />}
-      {on('cafes') && <PoiGroup title="다녀온 카페" pkey="cafes" count={state.cafeCount} C={C} setC={setC} feature="시그니처" />}
 
       {on('cost') && (
         <Group title="비용">
           {C.costRows.map((r, i) => (
-            <div className="repeat-item" key={i}>
+            <div className="repeat-item" key={`cost-${i}`}>
               <div className="repeat-head">
                 <span>항목 {i + 1}</span>
-                <button className="rm" onClick={() => setC({ costRows: C.costRows.filter((_, x) => x !== i) })}>삭제</button>
+                <button type="button" className="rm" onClick={() => setC({ costRows: C.costRows.filter((_, x) => x !== i) })}>삭제</button>
               </div>
               <div className="grid3">
                 <input type="text" value={r.item} placeholder="항목 (교통)"
-                  onChange={(e) => updateCost(C, setC, i, { item: e.target.value })} />
+                  onChange={(e) => setC({ costRows: C.costRows.map((x, xi) => xi === i ? { ...x, item: e.target.value } : x) })} />
                 <input type="text" value={r.amount} placeholder="금액 (10만원)"
-                  onChange={(e) => updateCost(C, setC, i, { amount: e.target.value })} />
+                  onChange={(e) => setC({ costRows: C.costRows.map((x, xi) => xi === i ? { ...x, amount: e.target.value } : x) })} />
                 <input type="text" value={r.memo} placeholder="메모 (선택)"
-                  onChange={(e) => updateCost(C, setC, i, { memo: e.target.value })} />
+                  onChange={(e) => setC({ costRows: C.costRows.map((x, xi) => xi === i ? { ...x, memo: e.target.value } : x) })} />
               </div>
             </div>
           ))}
-          <button className="add" onClick={() => setC({ costRows: [...C.costRows, { item: '', amount: '', memo: '' }] })}>＋ 항목 추가</button>
+          <button type="button" className="add" onClick={() => setC({ costRows: [...C.costRows, { item: '', amount: '', memo: '' }] })}>＋ 항목 추가</button>
           <div className="grid2" style={{ marginTop: 10 }}>
             <Field label="합계"><input type="text" value={C.costTotal} placeholder="총액"
               onChange={(e) => setC({ costTotal: e.target.value })} /></Field>
@@ -120,23 +220,23 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
       {on('tips') && (
         <Group title="꿀팁">
           {C.tips.map((t, i) => (
-            <div className="line-item" key={i}>
+            <div className="line-item" key={`tip-${i}`}>
               <input type="text" value={t} placeholder={`꿀팁 ${i + 1}`}
                 onChange={(e) => setC({ tips: C.tips.map((x, xi) => xi === i ? e.target.value : x) })} />
-              <button className="rm" onClick={() => setC({ tips: C.tips.filter((_, x) => x !== i) })}>삭제</button>
+              <button type="button" className="rm" onClick={() => setC({ tips: C.tips.filter((_, x) => x !== i) })}>삭제</button>
             </div>
           ))}
-          <button className="add" onClick={() => setC({ tips: [...C.tips, ''] })}>＋ 꿀팁 추가</button>
+          <button type="button" className="add" onClick={() => setC({ tips: [...C.tips, ''] })}>＋ 꿀팁 추가</button>
         </Group>
       )}
 
       {on('faq') && (
         <Group title="FAQ">
           {C.faq.map((f, i) => (
-            <div className="repeat-item" key={i}>
+            <div className="repeat-item" key={`faq-${i}`}>
               <div className="repeat-head">
                 <span>질문 {i + 1}</span>
-                <button className="rm" onClick={() => setC({ faq: C.faq.filter((_, x) => x !== i) })}>삭제</button>
+                <button type="button" className="rm" onClick={() => setC({ faq: C.faq.filter((_, x) => x !== i) })}>삭제</button>
               </div>
               <input type="text" value={f.q} placeholder="질문"
                 onChange={(e) => setC({ faq: C.faq.map((x, xi) => xi === i ? { ...x, q: e.target.value } : x) })} />
@@ -144,7 +244,7 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
                 onChange={(e) => setC({ faq: C.faq.map((x, xi) => xi === i ? { ...x, a: e.target.value } : x) })} />
             </div>
           ))}
-          <button className="add" onClick={() => setC({ faq: [...C.faq, { q: '', a: '' }] })}>＋ 질문 추가</button>
+          <button type="button" className="add" onClick={() => setC({ faq: [...C.faq, { q: '', a: '' }] })}>＋ 질문 추가</button>
         </Group>
       )}
 
@@ -153,7 +253,7 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
           <div className="grid2">
             <Field label="별점">
               <select value={C.verdictScore} onChange={(e) => setC({ verdictScore: e.target.value })}>
-                {RATING_OPTS.map((r) => <option key={r} value={r}>{r === '' ? '선택' : r}</option>)}
+                {RATING_OPTS.map((r) => <option key={r || 'empty'} value={r}>{r === '' ? '선택' : r}</option>)}
               </select>
             </Field>
             <Field label="한 줄 총평"><input type="text" value={C.verdictOne} placeholder="예: 다시 가고 싶은 여행지"
@@ -175,62 +275,6 @@ export default function TravelContent({ state, set }: { state: State; set: Sette
         </Group>
       )}
     </div>
-  )
-}
-
-function updateStop(C: TC, setC: (p: Partial<TC>) => void, i: number, patch: Partial<TC['stops'][number]>) {
-  setC({ stops: C.stops.map((x, xi) => (xi === i ? { ...x, ...patch } : x)) })
-}
-function updateCost(C: TC, setC: (p: Partial<TC>) => void, i: number, patch: Partial<TC['costRows'][number]>) {
-  setC({ costRows: C.costRows.map((x, xi) => (xi === i ? { ...x, ...patch } : x)) })
-}
-
-function PoiGroup({ title, pkey, count, C, setC, feature }: {
-  title: string; pkey: PoiKey; count: number; C: TC
-  setC: (p: Partial<TC>) => void; feature?: string
-}) {
-  const list = C[pkey]
-  const setPoi = (i: number, patch: Partial<Poi>) => {
-    const arr = list.slice()
-    arr[i] = { ...emptyPoi, ...(arr[i] || {}), ...patch }
-    setC({ [pkey]: arr } as Partial<TC>)
-  }
-  const rows = []
-  for (let i = 0; i < Math.max(1, count); i++) {
-    const it = list[i] || emptyPoi
-    rows.push(
-      <div className="repeat-item" key={i}>
-        <div className="repeat-head"><span>{title.replace('다녀온 ', '')} {i + 1}</span></div>
-        <div className="grid2">
-          <input type="text" value={it.name} placeholder="이름"
-            onChange={(e) => setPoi(i, { name: e.target.value })} />
-          <select value={it.rating} onChange={(e) => setPoi(i, { rating: e.target.value })}>
-            {RATING_OPTS.map((r) => <option key={r} value={r}>{r === '' ? '별점' : `★ ${r}`}</option>)}
-          </select>
-        </div>
-        {feature && (
-          <input type="text" value={it.feature} placeholder={feature}
-            onChange={(e) => setPoi(i, { feature: e.target.value })} />
-        )}
-        <textarea value={it.review} placeholder="솔직 후기·분위기·팁"
-          onChange={(e) => setPoi(i, { review: e.target.value })} />
-        <div className="grid3">
-          <input type="text" value={it.loc} placeholder="위치"
-            onChange={(e) => setPoi(i, { loc: e.target.value })} />
-          <input type="text" value={it.price} placeholder={feature ? '가격대' : '입장료'}
-            onChange={(e) => setPoi(i, { price: e.target.value })} />
-          <input type="text" value={it.dur} placeholder={feature ? '영업시간' : '소요시간'}
-            onChange={(e) => setPoi(i, { dur: e.target.value })} />
-        </div>
-        <ImageGallery value={it.images} onChange={(v) => setPoi(i, { images: v })} max={MAX_IMAGES} />
-      </div>,
-    )
-  }
-  return (
-    <Group title={title}>
-      <p className="content-hint sm">개수는 ‘구성’ 탭에서 조절해요 (현재 {count}개).</p>
-      {rows}
-    </Group>
   )
 }
 

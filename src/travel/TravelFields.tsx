@@ -114,13 +114,14 @@ export default function TravelFields({ state, set }: { state: State; set: Setter
         </div>
       </div>
 
-      {/* 섹션 조합 (레고) */}
       <div className="field" style={{ marginTop: 18 }}>
         <label>넣을 섹션 고르기</label>
+        <p className="content-hint sm" style={{ marginBottom: 8 }}>
+          맛집·카페·관광지는 카테고리로 나누지 않고, <strong>코스 후기</strong>에서 일정 순서대로 씁니다.
+        </p>
         <div className="sections">
           {TRAVEL_SECTIONS.map((s) => {
             const active = state.travelSections[s.key]
-            const count = s.countKey ? state[s.countKey] : undefined
             return (
               <div key={s.key} className={'sec-row' + (active ? ' on' : '')}>
                 <button
@@ -131,23 +132,6 @@ export default function TravelFields({ state, set }: { state: State; set: Setter
                   <span className="sec-check">{active ? '✓' : ''}</span>
                   {s.label}
                 </button>
-                {s.countKey && active && (
-                  <span className="stepper">
-                    <button
-                      onClick={() => set(s.countKey!, Math.max(1, (count ?? 1) - 1))}
-                      aria-label="줄이기"
-                    >
-                      −
-                    </button>
-                    <span className="stepper-n">{count}</span>
-                    <button
-                      onClick={() => set(s.countKey!, Math.min(6, (count ?? 1) + 1))}
-                      aria-label="늘리기"
-                    >
-                      +
-                    </button>
-                  </span>
-                )}
                 {s.key === 'schedule' && active && (
                   <span className="mini-seg">
                     <button

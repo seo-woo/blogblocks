@@ -16,12 +16,30 @@ export function hydrateState(raw: unknown): State {
   const saved = raw as Record<string, unknown>
   const modeRaw = saved.mode as Mode
   const mode: Mode = VALID_MODES.includes(modeRaw) ? modeRaw : initialState.mode
+  const oldSecs = (saved.travelSections && typeof saved.travelSections === 'object')
+    ? saved.travelSections as Record<string, boolean>
+    : {}
+  const courseOn = typeof oldSecs.course === 'boolean'
+    ? oldSecs.course
+    : (oldSecs.spots || oldSecs.restaurants || oldSecs.cafes) !== false
   return {
     ...initialState,
     ...saved,
     mode,
-    travelSections: { ...initialState.travelSections, ...(saved.travelSections as State['travelSections'] || {}) },
-    travelContent: migrateTravelContent({ ...emptyTravelContent, ...(saved.travelContent || {}) }),
+    travelSections: {
+      ...initialState.travelSections,
+      hero: oldSecs.hero ?? true,
+      summary: oldSecs.summary ?? true,
+      toc: oldSecs.toc ?? true,
+      schedule: oldSecs.schedule ?? true,
+      course: courseOn,
+      cost: oldSecs.cost ?? true,
+      tips: oldSecs.tips ?? true,
+      faq: oldSecs.faq ?? true,
+      verdict: oldSecs.verdict ?? true,
+      cta: oldSecs.cta ?? true,
+    },
+    travelContent: migrateTravelContent({ ...emptyTravelContent, ...(saved.travelContent as object || {}) }),
     travelAccent: TRAVEL_ACCENTS.some((a) => a.id === saved.travelAccent)
       ? saved.travelAccent as State['travelAccent']
       : initialState.travelAccent,

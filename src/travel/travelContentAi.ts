@@ -1,13 +1,14 @@
 import {
-  emptyPoi,
   emptyTravelContent,
+  emptyVisit,
+  VISIT_KINDS,
   TRAVEL_SECTIONS,
   type CostRow,
   type Faq,
-  type Poi,
   type State,
-  type Stop,
   type TravelContent,
+  type Visit,
+  type VisitKind,
 } from '../types'
 import { companionNote } from '../lib/prompt'
 import { asStr, extractJsonObject } from '../lib/parseJson'
@@ -24,24 +25,13 @@ export function buildTravelFillPrompt(state: State): string {
       '  "heroSubtitle": "한 줄 소개",',
     )
   }
-  if (on.schedule) {
+  if (on.schedule || on.course) {
     fields.push(
-      '  "stops": [ { "emoji": "☕", "time": "09:30", "place": "장소", "memo": "메모(선택)" } ],',
-    )
-  }
-  if (on.spots) {
-    fields.push(
-      `  "spots": [ /* ${state.spotCount}개 */ { "name":"", "rating":"4.5", "feature":"", "review":"솔직 후기", "loc":"위치", "price":"입장료", "dur":"소요시간" } ],`,
-    )
-  }
-  if (on.restaurants) {
-    fields.push(
-      `  "restaurants": [ /* ${state.restCount}개 */ { "name":"", "rating":"4.5", "feature":"대표메뉴", "review":"", "loc":"", "price":"가격대", "dur":"영업시간" } ],`,
-    )
-  }
-  if (on.cafes) {
-    fields.push(
-      `  "cafes": [ /* ${state.cafeCount}개 */ { "name":"", "rating":"4.5", "feature":"시그니처", "review":"", "loc":"", "price":"가격대", "dur":"영업시간" } ],`,
+      '  "visits": [',
+      '    { "kind":"cafe", "emoji":"☕", "time":"09:30", "name":"카페 이름", "memo":"일정 한줄", "rating":"4.5", "feature":"시그니처", "review":"솔직 후기", "loc":"위치", "price":"가격대", "dur":"영업시간" },',
+      '    { "kind":"spot", "emoji":"📍", "time":"11:00", "name":"관광지", "memo":"", "rating":"4.5", "feature":"", "review":"솔직 후기", "loc":"위치", "price":"입장료", "dur":"소요시간" },',
+      '    { "kind":"restaurant", "emoji":"🍜", "time":"13:00", "name":"맛집", "memo":"점심", "rating":"4.5", "feature":"대표메뉴", "review":"솔직 후기", "loc":"", "price":"가격대", "dur":"영업시간" }',
+      '  ],',
     )
   }
   if (on.cost) {
@@ -78,7 +68,8 @@ export function buildTravelFillPrompt(state: State): string {
     '- 코드펜스·설명 없이 JSON 객체 하나만 출력하세요.\n' +
     '- 아래 스키마 키만 사용하고, 없는 섹션 키는 넣지 마세요.\n' +
     '- images 필드는 넣지 마세요 (사진은 사용자가 직접 올립니다).\n' +
-    '- 장소/음식점/카페는 "추천"이 아니라 실제로 다녀온 것처럼 구체적으로 쓰세요.\n' +
+    '- visits는 카테고리별이 아니라 실제 방문 시간 순서로 나열하세요. 맛집·카페·관광지를 섞어도 됩니다.\n' +
+    '- kind는 "spot"(관광지), "restaurant"(맛집), "cafe"(카페), "other"(기타) 중 하나.\n' +
     '- rating·verdictScore는 "5","4.5","4","3.5","3","2.5","2","1.5","1" 중 하나.\n' +
     '- 문체: ~어요/~습니다 혼용, 무게감+가벼운 유머, AI 상투적 마무리 금지, 문단 짧게.\n' +
     '- 목표 분량 감각: ' + state.length + '\n' +
@@ -100,21 +91,21 @@ function asObj(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 }
 
-function normalizeStop(raw: unknown): Stop {
-  const o = asObj(raw)
-  return {
-    emoji: asStr(o.emoji).slice(0, 4),
-    time: asStr(o.time),
-    place: asStr(o.place),
-    memo: asStr(o.memo),
-  }
+function asKind(v: unknown): VisitKind {
+  return (VISIT_KINDS.some((k) => k.id === v) ? v : 'spot') as VisitKind
 }
 
-function normalizePoi(raw: unknown, prev?: Poi): Poi {
+function normalizeVisit(raw: unknown, prev?: Visit): Visit {
   const o = asObj(raw)
+  const kind = asKind(o.kind)
+  const defEmoji = VISIT_KINDS.find((k) => k.id === kind)?.emoji || '📍'
   return {
-    ...emptyPoi,
-    name: asStr(o.name),
+    ...emptyVisit,
+    kind,
+    emoji: asStr(o.emoji).slice(0, 4) || defEmoji,
+    time: asStr(o.time),
+    name: asStr(o.name || o.place),
+    memo: asStr(o.memo),
     rating: asStr(o.rating),
     feature: asStr(o.feature),
     review: asStr(o.review),
@@ -148,15 +139,36 @@ export function parseTravelContentResponse(
   const o = extractJsonObject(raw)
   if (!o) return null
 
+  let visits = arr(o.visits, (x, i) => normalizeVisit(x, prev.visits[i]))
+  // 구 스키마(spots/restaurants/cafes/stops)로 온 경우 보정
+  if (!visits.length) {
+    const fromList = (kind: VisitKind, list: unknown): Visit[] =>
+      arr(list, (x) => normalizeVisit({ ...asObj(x), kind }, undefined))
+    visits = [
+      ...fromList('spot', o.spots),
+      ...fromList('restaurant', o.restaurants),
+      ...fromList('cafe', o.cafes),
+    ]
+    if (!visits.length && Array.isArray(o.stops)) {
+      visits = arr(o.stops, (x) => {
+        const s = asObj(x)
+        return normalizeVisit({
+          kind: 'other',
+          emoji: s.emoji,
+          time: s.time,
+          name: s.place,
+          memo: s.memo,
+        })
+      })
+    }
+  }
+
   const next: TravelContent = {
     ...emptyTravelContent,
     heroTitle: asStr(o.heroTitle),
     heroSubtitle: asStr(o.heroSubtitle),
-    heroImages: prev.heroImages?.length ? prev.heroImages.map((im) => ({ ...im })) : [], // 사진·위치 유지
-    stops: arr(o.stops, normalizeStop),
-    spots: arr(o.spots, (x, i) => normalizePoi(x, prev.spots[i])),
-    restaurants: arr(o.restaurants, (x, i) => normalizePoi(x, prev.restaurants[i])),
-    cafes: arr(o.cafes, (x, i) => normalizePoi(x, prev.cafes[i])),
+    heroImages: prev.heroImages?.length ? prev.heroImages.map((im) => ({ ...im })) : [],
+    visits,
     costRows: arr(o.costRows, normalizeCost),
     costTotal: asStr(o.costTotal),
     costTotalMemo: asStr(o.costTotalMemo),
@@ -172,18 +184,7 @@ export function parseTravelContentResponse(
   return next
 }
 
-/** AI가 채운 배열 길이에 맞춰 개수 카운트 동기화 */
-export function countsFromContent(content: TravelContent, state: State): Partial<State> {
-  const clamp = (n: number) => Math.max(1, Math.min(6, n || 1))
-  const patch: Partial<State> = {}
-  if (state.travelSections.spots && content.spots.length) {
-    patch.spotCount = clamp(content.spots.length)
-  }
-  if (state.travelSections.restaurants && content.restaurants.length) {
-    patch.restCount = clamp(content.restaurants.length)
-  }
-  if (state.travelSections.cafes && content.cafes.length) {
-    patch.cafeCount = clamp(content.cafes.length)
-  }
-  return patch
+/** @deprecated 카운트 동기화는 visits 자유 개수라 더 이상 필요 없음 */
+export function countsFromContent(_content: TravelContent, _state: State): Partial<State> {
+  return {}
 }
