@@ -124,7 +124,7 @@ export interface SeoImage {
 export interface SeoPlan {
   mainKeyword: string
   subKeywords: string[]
-  /** 티스토리·네이버·블로거 태그칸용 — 유입을 노리는 검색 태그 */
+  /** 티스토리·블로거 태그칸용 — 유입을 노리는 검색 태그 */
   tags: string[]
   intent: string
   audience: string

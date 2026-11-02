@@ -94,8 +94,8 @@ export default function App() {
       </div>
 
       <p className="foot">
-        본문 탭에서 <strong>서식 복사</strong>·<strong>영어 서식</strong>·<strong>네이버 말투</strong>로
-        복사해 티스토리·블로거·네이버 일반 글쓰기에 붙여넣으세요.
+        본문 탭에서 <strong>서식 복사</strong>·<strong>영어 서식</strong>으로
+        복사해 티스토리·블로거 일반 글쓰기에 붙여넣으세요.
         핸드폰에서 쓴 글은 ‘임시 저장 → 파일로 보내기’로 PC에서 이어 쓸 수 있어요.
       </p>
 

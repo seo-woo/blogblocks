@@ -40,7 +40,7 @@ export async function completePrompt(prompt: string): Promise<string> {
   return runPrompt(prompt, 'json')
 }
 
-/** 영어/네이버 서식처럼 순수 HTML·텍스트 응답 */
+/** 영어 서식처럼 순수 HTML·텍스트 응답 */
 export async function completePlainPrompt(prompt: string): Promise<string> {
   return runPrompt(prompt, 'text')
 }

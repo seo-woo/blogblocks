@@ -1,7 +1,7 @@
 import { completePlainPrompt } from './ai'
 import { extractJsonObject } from './parseJson'
 
-export type FormatVariant = 'en' | 'naver'
+export type FormatVariant = 'en'
 
 /** 모델이 실수로 JSON/코드펜스로 감싸도 HTML만 남긴다 */
 function extractHtml(raw: string): string {
@@ -48,28 +48,22 @@ function buildRewritePrompt(html: string, variant: FormatVariant): string {
     '- [이미지 N] 자리표시자와 그 뒤 ALT 문구 패턴은 유지하라.\n' +
     '- 이모지는 소제목에 붙어 있으면 그대로 둬라.\n\n'
 
-  const tone =
-    variant === 'en'
-      ? '# 목표\n' +
-        '- Google Blogger용 영어 본문으로 번역한다.\n' +
-        '- 자연스럽고 읽기 쉬운 과학 설명 톤. 딱딱한 학술체나 AI 상투어 금지.\n' +
-        '- 문단은 짧게. 한 문단 1~2문장.\n' +
-        '- FAQ의 "Q." 표기는 유지하고 질문·답만 영어로.\n' +
-        '- "🙋 자주 묻는 질문"은 "🙋 FAQ"로.\n' +
-        '- "📚 참고자료"는 "📚 References"로. 참고 항목(매체·제목·URL)은 그대로 둔다.\n' +
-        '- a 태그(href)가 있으면 유지한다.\n\n'
-      : '# 목표\n' +
-        '- 네이버 블로그에 올리는 듯한 친근한 말투로 다시 쓴다.\n' +
-        '- "~해요/~해요!" 체를 기본으로, 말하듯 읽히게.\n' +
-        '- 과학 내용은 정확히 유지하되, 설명은 더 쉽게·짧게.\n' +
-        '- 과한 이모지·감탄·광고 말투는 금지. 상투적 AI 마무리 금지.\n' +
-        '- 문단은 기본 1문장(최대 2).\n' +
-        '- 참고자료 목록(매체·제목·URL)과 a 태그는 그대로 둔다.\n\n'
+  const tone: Record<FormatVariant, string> = {
+    en:
+      '# 목표\n' +
+      '- Google Blogger용 영어 본문으로 번역한다.\n' +
+      '- 자연스럽고 읽기 쉬운 과학 설명 톤. 딱딱한 학술체나 AI 상투어 금지.\n' +
+      '- 문단은 짧게. 한 문단 1~2문장.\n' +
+      '- FAQ의 "Q." 표기는 유지하고 질문·답만 영어로.\n' +
+      '- "🙋 자주 묻는 질문"은 "🙋 FAQ"로.\n' +
+      '- "📚 참고자료"는 "📚 References"로. 참고 항목(매체·제목·URL)은 그대로 둔다.\n' +
+      '- a 태그(href)가 있으면 유지한다.\n\n',
+  }
 
-  return common + tone + '# 원문 HTML\n' + html
+  return common + tone[variant] + '# 원문 HTML\n' + html
 }
 
-/** 본문 HTML을 영어 또는 네이버 말투로 다시 쓴다 */
+/** 본문 HTML을 영어로 다시 쓴다 */
 export async function rewriteHtmlVariant(
   html: string,
   variant: FormatVariant,

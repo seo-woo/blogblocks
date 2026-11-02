@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { completeGemini } from '../src/lib/gemini'
 import { buildSeoFillPrompt, parseSeoResponse } from '../src/seo/seoAi'
 import { renderSeoHtml } from '../src/seo/seoHtml'
-import { buildMasterPrompt } from '../src/seo/rules'
+import { buildMasterPrompt, buildReinforcePrompt } from '../src/seo/rules'
 import { toDraftFile } from '../src/lib/drafts'
 import { withImageStyle } from '../src/seo/imageStyle'
 import {
@@ -251,8 +251,10 @@ async function main(): Promise<void> {
   mkdirSync(folder, { recursive: true })
 
   writeFileSync(join(folder, '초안.md'), planMarkdown(state, folder))
-  writeFileSync(join(folder, '본문.html'), renderSeoHtml(state) + '\n')
+  const html = renderSeoHtml(state)
+  writeFileSync(join(folder, '본문.html'), html + '\n')
   writeFileSync(join(folder, '사실확인-프롬프트.txt'), buildMasterPrompt(state))
+  writeFileSync(join(folder, '보강-프롬프트.txt'), buildReinforcePrompt(state, html))
   writeFileSync(
     join(folder, '스튜디오-불러오기.json'),
     JSON.stringify(toDraftFile(content.title || topic.topic, state), null, 2),

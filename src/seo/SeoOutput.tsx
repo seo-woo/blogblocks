@@ -4,11 +4,11 @@ import { AiError, completePrompt } from '../lib/ai'
 import { HtmlCopyButtons, HtmlCopySizeNote } from '../components/HtmlCopyActions'
 import { copyText } from '../lib/clipboard'
 import { renderSeoHtml, strayImages, wrapPreviewDoc } from './seoHtml'
-import { buildMasterPrompt } from './rules'
+import { buildMasterPrompt, buildReinforcePrompt } from './rules'
 import { buildImageScenePrompt, parseImageScene } from './seoAi'
 import { withImageStyle } from './imageStyle'
 
-type Tab = 'plan' | 'body' | 'images' | 'related' | 'prompt'
+type Tab = 'plan' | 'body' | 'images' | 'related' | 'prompt' | 'reinforce'
 
 const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'plan', label: '기획' },
@@ -16,6 +16,7 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   { id: 'images', label: '이미지' },
   { id: 'related', label: '관련 글' },
   { id: 'prompt', label: '프롬프트' },
+  { id: 'reinforce', label: '보강' },
 ]
 
 const CopyBtn = memo(function CopyBtn({
@@ -113,6 +114,10 @@ export default function SeoOutput({ state, set }: { state: State; set: Setter })
   const filled = useMemo(() => hasContent(c), [c])
   const stray = useMemo(() => strayImages(state), [state])
   const masterPrompt = useMemo(() => buildMasterPrompt(state), [state])
+  const reinforcePrompt = useMemo(
+    () => buildReinforcePrompt(state, filled ? html : ''),
+    [state, filled, html],
+  )
 
   return (
     <section className="panel out-wrap">
@@ -132,6 +137,7 @@ export default function SeoOutput({ state, set }: { state: State; set: Setter })
         <div className="actions">
           {tab === 'body' && <HtmlCopyButtons html={html} />}
           {tab === 'prompt' && <CopyBtn text={masterPrompt} label="복사" small={false} />}
+          {tab === 'reinforce' && <CopyBtn text={reinforcePrompt} label="복사" small={false} />}
         </div>
       </div>
 
@@ -170,7 +176,7 @@ export default function SeoOutput({ state, set }: { state: State; set: Setter })
                         <CopyBtn text={c.plan.tags.join(', ')} label="태그 복사" />
                       </div>
                       <p className="content-hint sm">
-                        티스토리·네이버·블로거 태그칸에 붙여넣으면 됩니다. 유입용 검색 태그예요.
+                        티스토리·블로거 태그칸에 붙여넣으면 됩니다. 유입용 검색 태그예요.
                       </p>
                     </div>
                   </div>
@@ -321,6 +327,16 @@ export default function SeoOutput({ state, set }: { state: State; set: Setter })
               최신 정보로 쓰게 하세요. 결과는 왼쪽 칸에 직접 옮기면 됩니다.
             </p>
             <div className="out">{masterPrompt}</div>
+          </div>
+        )}
+
+        {tab === 'reinforce' && (
+          <div>
+            <p className="preview-note" style={{ marginTop: 0, marginBottom: 12 }}>
+              다 쓴 글이나 발행한 글을 <strong>웹 검색이 되는 Claude</strong>로 사실 확인하고 보강합니다.
+              초안이 있으면 아래에 들어가 있고, 발행한 글이면 그 자리에 링크나 본문을 붙여넣으세요.
+            </p>
+            <div className="out">{reinforcePrompt}</div>
           </div>
         )}
       </div>
