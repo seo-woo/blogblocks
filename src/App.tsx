@@ -1,24 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  emptyFoodContent,
-  emptyProductContent,
-  emptyTravelContent,
-  foodAccentColor,
-  initialState,
-  productAccentColor,
-  travelAccentColor,
-  type Mode,
-  type State,
-  type TravelContent,
-} from './types'
-import LabFields from './lab/LabFields'
-import LabOutput from './lab/LabOutput'
-import TravelPanel from './travel/TravelPanel'
-import TravelOutput from './travel/TravelOutput'
-import FoodPanel from './food/FoodPanel'
-import FoodOutput from './food/FoodOutput'
-import ProductPanel from './product/ProductPanel'
-import ProductOutput from './product/ProductOutput'
+import { useCallback, useEffect, useState } from 'react'
+import { emptySeoContent, initialState, intentDef, type State } from './types'
+import SeoPanel from './seo/SeoPanel'
+import SeoOutput from './seo/SeoOutput'
 import DraftsDialog from './components/DraftsDialog'
 import { hydrateState } from './lib/state'
 
@@ -34,94 +17,45 @@ function loadState(): State {
   return { ...initialState }
 }
 
-const LENGTHS = [
-  '짧게 (약 1,000~1,300자)',
-  '보통 (약 1,500~2,000자)',
-  '길게 (약 2,500자 이상)',
-]
-
-function accentFor(mode: Mode, state: State): string {
-  if (mode === 'lab') return 'var(--lab)'
-  if (mode === 'food') return foodAccentColor(state.foodAccent)
-  if (mode === 'product') return productAccentColor(state.productAccent)
-  return travelAccentColor(state.travelAccent)
-}
-
-function modeMeta(mode: Mode): { glyph: string; tag: string } {
-  if (mode === 'lab') return { glyph: '🧪', tag: 'MODE · AI 작업 실험실' }
-  if (mode === 'food') return { glyph: '🍜', tag: 'MODE · 맛집 리뷰' }
-  if (mode === 'product') return { glyph: '📦', tag: 'MODE · 제품 리뷰' }
-  return { glyph: '✈️', tag: 'MODE · 여행' }
-}
-
 export default function App() {
   const [state, setState] = useState<State>(loadState)
   const [draftsOpen, setDraftsOpen] = useState(false)
-
-  const hasAI = useMemo(
-    () => !!(window.claude && typeof window.claude.complete === 'function'),
-    [],
-  )
 
   useEffect(() => {
     try { localStorage.setItem(STORE, JSON.stringify(state)) } catch { /* ignore */ }
   }, [state])
 
-  useEffect(() => {
-    document.documentElement.style.setProperty('--accent', accentFor(state.mode, state))
-  }, [state.mode, state.travelAccent, state.foodAccent, state.productAccent])
-
-  function set<K extends keyof State>(key: K, value: State[K]) {
+  const set = useCallback(<K extends keyof State>(key: K, value: State[K]) => {
     setState((s) => ({ ...s, [key]: value }))
-  }
-
-  function applyTravelFill(content: TravelContent) {
-    setState((s) => ({
-      ...s,
-      travelContent: content,
-    }))
-  }
+  }, [])
 
   const openDrafts = useCallback(() => { setDraftsOpen(true) }, [])
   const closeDrafts = useCallback(() => { setDraftsOpen(false) }, [])
   const restoreDraft = useCallback((next: State) => { setState(next) }, [])
 
-  function reset() {
-    if (!window.confirm('입력한 내용을 모두 지울까요?')) return
+  const reset = useCallback(() => {
+    if (!window.confirm('이번 글의 내용을 모두 지울까요?')) return
     setState((s) => ({
       ...initialState,
-      mode: s.mode,
-      travelSections: { ...initialState.travelSections },
-      travelContent: {
-        ...emptyTravelContent,
-        visits: [],
-        costRows: [],
-        tips: [],
-        faq: [],
-      },
-      foodContent: { ...emptyFoodContent, exteriorImages: [], interiorImages: [], dishes: [] },
-      productContent: {
-        ...emptyProductContent,
-        unboxImages: [],
-        designImages: [],
-        usageImages: [],
-      },
+      field: s.field,
+      intent: s.intent,
+      length: s.length,
+      imageMarkers: s.imageMarkers,
+      content: { ...emptySeoContent, sections: [], faq: [], images: [], related: [], checks: [], references: [] },
     }))
-  }
-
-  const { glyph, tag: modeTag } = modeMeta(state.mode)
+  }, [])
 
   return (
     <div className="wrap">
       <header className="top">
         <div className="brand">
-          <div className="glyph">{glyph}</div>
+          <div className="glyph">🔬</div>
           <div>
-            <h1>프롬프트 스튜디오</h1>
-            <p className="sub">입력을 채우면 붙여넣기용 초안·HTML이 완성됩니다</p>
+            <h1>알쏭과학 스튜디오</h1>
+            <p className="sub">궁금쓰 — 매일 하나씩 풀어보는 세상의 궁금증</p>
           </div>
         </div>
-        <span className="eyebrow">{modeTag}</span>
+        <span className="eyebrow">{intentDef(state.intent).label} · {state.field}</span>
       </header>
 
       <div className="studio">
@@ -138,54 +72,31 @@ export default function App() {
             </div>
           </div>
           <div className="panel-body">
-            <div className="modes modes-4">
-              <ModeButton active={state.mode === 'lab'} mode="lab"
-                label="🧪 AI 실험실" desc="실험 노트 · Before/After" onSelect={set} />
-              <ModeButton active={state.mode === 'travel'} mode="travel"
-                label="✈️ 여행" desc="일정 순 코스 · HTML" onSelect={set} />
-              <ModeButton active={state.mode === 'food'} mode="food"
-                label="🍜 맛집 리뷰" desc="외관·내부·음식·총점" onSelect={set} />
-              <ModeButton active={state.mode === 'product'} mode="product"
-                label="📦 제품 리뷰" desc="언박싱·디자인·사용기" onSelect={set} />
-            </div>
-
-            {state.mode === 'lab' && <LabFields state={state} set={set} />}
-            {state.mode === 'travel' && <TravelPanel state={state} set={set} />}
-            {state.mode === 'food' && <FoodPanel state={state} set={set} />}
-            {state.mode === 'product' && <ProductPanel state={state} set={set} />}
-
-            <div className="field" style={{ marginTop: 16 }}>
-              <label>목표 분량</label>
-              <select value={state.length} onChange={(e) => set('length', e.target.value)}>
-                {LENGTHS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
+            <SeoPanel state={state} set={set} />
 
             <div className="tone">
-              <span className="eyebrow">항상 적용되는 톤 규칙</span>
+              <span className="eyebrow">항상 지키는 원칙</span>
               <ul>
-                <li>~어요 / ~습니다 혼용</li>
-                <li>무게감 + 유머 한 방울</li>
-                <li>AI 티 나는 마무리 금지</li>
-                <li>문단 3~4줄, 모바일 우선</li>
-                <li>이모지 소제목</li>
+                <li>쉽게 설명하기</li>
+                <li>도입부는 흥미·어그로</li>
+                <li>간결하게 · 스캔해서 읽히게</li>
+                <li>과학적 근거 확인하기</li>
+                <li>확실한 사실과 추정 구분</li>
+                <li>사진 비중 높게</li>
+                <li>답을 앞에서 먼저</li>
+                <li>궁금증이 풀리면 끝</li>
               </ul>
             </div>
           </div>
         </section>
 
-        {state.mode === 'lab' && <LabOutput state={state} hasAI={hasAI} />}
-        {state.mode === 'travel' && (
-          <TravelOutput state={state} onAiFill={applyTravelFill} />
-        )}
-        {state.mode === 'food' && <FoodOutput state={state} />}
-        {state.mode === 'product' && <ProductOutput state={state} />}
+        <SeoOutput state={state} set={set} />
       </div>
 
       <p className="foot">
-        {state.mode === 'lab'
-          ? '완성된 프롬프트를 복사해서 Claude에게 붙여넣으면 초안이 나옵니다.'
-          : 'HTML을 복사해 티스토리 글쓰기의 HTML 편집기에 붙여넣으면 그대로 발행됩니다. 핸드폰에서 쓴 글은 ‘임시 저장 → 파일로 보내기’로 PC에 이어서 작업할 수 있습니다.'}
+        본문 탭에서 <strong>서식 복사</strong>·<strong>영어 서식</strong>·<strong>네이버 말투</strong>로
+        복사해 티스토리·블로거·네이버 일반 글쓰기에 붙여넣으세요.
+        핸드폰에서 쓴 글은 ‘임시 저장 → 파일로 보내기’로 PC에서 이어 쓸 수 있어요.
       </p>
 
       <DraftsDialog
@@ -195,20 +106,5 @@ export default function App() {
         onRestore={restoreDraft}
       />
     </div>
-  )
-}
-
-function ModeButton(props: {
-  active: boolean
-  mode: Mode
-  label: string
-  desc: string
-  onSelect: <K extends keyof State>(key: K, value: State[K]) => void
-}) {
-  return (
-    <button className="mode-btn" aria-pressed={props.active} onClick={() => props.onSelect('mode', props.mode)}>
-      <span className="m-label">{props.label}</span>
-      <span className="m-desc">{props.desc}</span>
-    </button>
   )
 }

@@ -3,6 +3,10 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # 매일 초안 커밋으로는 재배포하지 않음
+    paths-ignore:
+      - 'drafts/**'
+      - 'topics.md'
   workflow_dispatch:
 
 permissions:

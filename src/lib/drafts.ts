@@ -1,4 +1,4 @@
-import type { Mode, State } from '../types'
+import type { State } from '../types'
 import { hydrateState } from './state'
 
 const DB_NAME = 'prompt-studio'
@@ -9,7 +9,8 @@ export interface SavedDraft {
   id: string
   name: string
   savedAt: number
-  mode: Mode
+  /** 다루던 궁금증 — 목록에서 글을 알아보기 위한 것 */
+  topic: string
   state: State
 }
 
@@ -62,7 +63,7 @@ export async function saveDraft(name: string, state: State, id?: string): Promis
     id: id || (crypto.randomUUID ? crypto.randomUUID() : `d-${Date.now()}`),
     name: name.trim() || '제목 없음',
     savedAt: Date.now(),
-    mode: state.mode,
+    topic: state.topic.trim(),
     state,
   }
   const db = await openDb()
@@ -94,7 +95,7 @@ export function parseDraftPayload(raw: unknown): { name: string; state: State } 
       state: hydrateState(o.state),
     }
   }
-  if (o.mode || o.travelContent || o.foodContent || o.productContent) {
+  if (o.topic || o.content) {
     return { name: '', state: hydrateState(o) }
   }
   throw new Error('프롬프트 스튜디오 임시 저장 파일이 아니에요')

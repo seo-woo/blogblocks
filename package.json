@@ -7,13 +7,15 @@
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "deploy": "npm run build && node ./node_modules/firebase-tools/lib/bin/firebase.js deploy --only hosting"
+    "deploy": "npm run build && node ./node_modules/firebase-tools/lib/bin/firebase.js deploy --only hosting",
+    "draft": "node scripts/run.mjs scripts/daily-draft.ts"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^26.4.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

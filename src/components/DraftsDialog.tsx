@@ -9,7 +9,7 @@ import {
   sendDraftFile,
   type SavedDraft,
 } from '../lib/drafts'
-import { MODE_LABEL, suggestDraftName } from '../lib/state'
+import { suggestDraftName } from '../lib/state'
 
 type Props = {
   open: boolean
@@ -35,7 +35,7 @@ const DraftRow = memo(function DraftRow({
   onSend: (draft: SavedDraft) => void
   onRemove: (draft: SavedDraft) => void
 }) {
-  const { name, mode, savedAt } = draft
+  const { name, topic, savedAt } = draft
 
   const handleLoad = useCallback(() => { onLoad(draft) }, [draft, onLoad])
   const handleSend = useCallback(() => { onSend(draft) }, [draft, onSend])
@@ -45,7 +45,9 @@ const DraftRow = memo(function DraftRow({
     <li className="draft-row">
       <div className="draft-row-main">
         <div className="draft-row-title">{name}</div>
-        <div className="draft-row-meta">{MODE_LABEL[mode]} · {formatWhen(savedAt)}</div>
+        <div className="draft-row-meta">
+          {topic && topic !== name ? `${topic} · ` : ''}{formatWhen(savedAt)}
+        </div>
       </div>
       <div className="draft-row-actions">
         <button type="button" className="btn" onClick={handleLoad}>불러오기</button>
